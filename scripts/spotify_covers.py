@@ -37,6 +37,7 @@ from pathlib import Path
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API = "https://api.spotify.com/v1"
 ITUNES_SEARCH = "https://itunes.apple.com/search"
+DEEZER_SEARCH = "https://api.deezer.com/search"
 IMAGE_EXTS_OK = {".jpg", ".jpeg", ".png", ".webp"}
 
 
@@ -143,37 +144,68 @@ def iter_playlist_tracks(playlist_id: str, token: str):
             break
 
 
-def itunes_hires_url(artist: str, album: str, res: int) -> str | None:
-    """Cherche la cover de l'album sur iTunes et renvoie une URL haute résolution.
-
-    Gratuit, sans authentification. Renvoie None si rien trouvé.
-    """
-    term = " ".join(p for p in [artist.split(",")[0].strip(), album] if p).strip()
-    if not term:
-        return None
+def _itunes_query(term: str, entity: str, limit: int = 8) -> list[dict]:
+    if not term.strip():
+        return []
     url = ITUNES_SEARCH + "?" + urllib.parse.urlencode(
-        {"term": term, "entity": "album", "limit": 5}
+        {"term": term, "entity": entity, "limit": limit}
     )
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "AI-Image/1.0"})
         with urllib.request.urlopen(req, timeout=20) as r:
-            results = json.loads(r.read()).get("results", [])
+            return json.loads(r.read()).get("results", [])
     except Exception:
-        return None
+        return []
+
+
+def itunes_album_url(artist: str, album: str, res: int) -> str | None:
+    """Cherche par ALBUM sur iTunes (haute résolution)."""
+    a = artist.split(",")[0].strip()
+    results = _itunes_query(f"{a} {album}".strip(), "album")
     if not results:
         return None
-
-    # Choisit le meilleur résultat : album dont le nom correspond le mieux.
     alb_low = album.strip().lower()
     best = None
-    for res_item in results:
-        coll = (res_item.get("collectionName") or "").lower()
+    for it in results:
+        coll = (it.get("collectionName") or "").lower()
         if alb_low and (alb_low in coll or coll in alb_low):
-            best = res_item
+            best = it
             break
     best = best or results[0]
     art = best.get("artworkUrl100") or best.get("artworkUrl60")
     return itunes_upscale_url(art, res) if art else None
+
+
+def itunes_song_url(artist: str, track: str, res: int) -> str | None:
+    """Cherche par TITRE sur iTunes (utile pour les singles/montages)."""
+    a = artist.split(",")[0].strip()
+    # nettoie les suffixes type "- Slowed", "(Remix)" qui gênent la recherche
+    clean = re.sub(r"\s*[-(].*$", "", track).strip() or track
+    for term in (f"{a} {clean}", clean):
+        results = _itunes_query(term, "song")
+        if results:
+            art = results[0].get("artworkUrl100") or results[0].get("artworkUrl60")
+            if art:
+                return itunes_upscale_url(art, res)
+    return None
+
+
+def deezer_url(artist: str, track: str) -> str | None:
+    """Secours : Deezer renvoie une cover 1000x1000 (sans authentification)."""
+    a = artist.split(",")[0].strip()
+    clean = re.sub(r"\s*[-(].*$", "", track).strip() or track
+    q = f'artist:"{a}" track:"{clean}"' if a else clean
+    url = DEEZER_SEARCH + "?" + urllib.parse.urlencode({"q": q, "limit": 1})
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "AI-Image/1.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.loads(r.read()).get("data", [])
+    except Exception:
+        return None
+    if not data:
+        return None
+    album = data[0].get("album", {})
+    return album.get("cover_xl") or album.get("cover_big")
 
 
 def download_image(url: str, target: Path) -> None:
@@ -202,7 +234,7 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
     duplicates = 0
     hires_hits = 0
     seen_stems: set[str] = set()  # doublons à l'intérieur du même téléchargement
-    itunes_cache: dict[tuple, str | None] = {}  # (artist, album) -> url HD (ou None)
+    album_cache: dict[tuple, str | None] = {}  # (artist, album) -> url iTunes album
     tracks = list(iter_playlist_tracks(playlist_id, token))
     total = len(tracks)
     print(f"🔎 {total} titre(s) trouvé(s).\n")
@@ -219,20 +251,15 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
             seen_stems.add(stem)
             continue
 
-        # 1) Tente la haute résolution via iTunes (avec cache par album).
         cover = None
-        is_hd = False
+        tag = "⚪ 640"
         if hq:
-            key = (artists.split(",")[0].strip().lower(), album.strip().lower())
-            if key not in itunes_cache:
-                itunes_cache[key] = itunes_hires_url(artists, album, res)
-                time.sleep(itunes_delay)  # respecte la limite de l'API iTunes
-            cover = itunes_cache[key]
-            is_hd = cover is not None
+            cover, tag = _find_hires(artists, album, name, res, album_cache, itunes_delay)
 
-        # 2) Repli sur la cover Spotify (640px) si pas de HD.
+        # Repli sur la cover Spotify (640px) si aucune source HD.
         if not cover:
             cover = spotify_cover
+            tag = "⚪ 640"
 
         if not cover:
             print(f"[{i}/{total}] ⏭️  {label} (pas de cover)")
@@ -247,9 +274,8 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
             download_image(cover, target)
             downloaded += 1
             seen_stems.add(stem)
-            if is_hd:
+            if tag != "⚪ 640":
                 hires_hits += 1
-            tag = "🟢 HD" if is_hd else "⚪ 640"
             print(f"[{i}/{total}] ⬇️  {tag}  {target.name}")
         except Exception as exc:
             skipped += 1
@@ -260,6 +286,32 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
           f"{duplicates} doublon(s) ignoré(s), {skipped} sans cover.")
     print(f"   Dans : {dest}")
     return 0
+
+
+def _find_hires(artists: str, album: str, track: str, res: int,
+                album_cache: dict, delay: float) -> tuple[str | None, str]:
+    """Cherche une cover HD via plusieurs sources. Renvoie (url, tag)."""
+    # 1) iTunes par album (mis en cache : 1 seule recherche par album).
+    key = (artists.split(",")[0].strip().lower(), album.strip().lower())
+    if key not in album_cache:
+        album_cache[key] = itunes_album_url(artists, album, res)
+        time.sleep(delay)
+    if album_cache[key]:
+        return album_cache[key], "🟢 HD"
+
+    # 2) iTunes par titre (singles/montages).
+    u = itunes_song_url(artists, track, res)
+    time.sleep(delay)
+    if u:
+        return u, "🟢 HD"
+
+    # 3) Deezer (cover 1000px).
+    u = deezer_url(artists, track)
+    time.sleep(delay)
+    if u:
+        return u, "🔵 1000"
+
+    return None, "⚪ 640"
 
 
 def _self_test() -> None:

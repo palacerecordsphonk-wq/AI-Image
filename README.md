@@ -58,9 +58,11 @@ Quatre onglets :
   (les covers s'y ajoutent) ou **crée un nouveau style** (le dossier est créé dans le
   projet). Toutes les covers sont téléchargées dans `styles/<style>/raw/`, nommées
   d'après le titre du morceau — prêtes pour le fine-tune.
-  **Haute qualité** : par défaut, les pochettes sont récupérées en **~3000px via
-  Apple Music** (l'API Spotify est plafonnée à 640px), avec repli automatique sur
-  Spotify si une cover n'est pas trouvée en HD.
+  **Haute qualité** : par défaut, les pochettes sont récupérées en HD via plusieurs
+  sources, dans l'ordre **Apple Music album (~3000px) → Apple Music titre → Deezer
+  (1000px) → Spotify (640px)**. L'API Spotify étant plafonnée à 640px, ce multi-source
+  maximise le nombre de covers nettes (certains morceaux exclusifs restent en 640px
+  s'ils n'existent nulle part ailleurs).
   **Nommage & anti-doublons** : les fichiers sont nommés « Artiste - Titre », et un
   morceau déjà présent dans le style est **ignoré** (pas de re-téléchargement) — pratique
   si plusieurs playlists partagent des titres.
