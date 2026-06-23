@@ -52,6 +52,11 @@ def main() -> None:
         action="store_true",
         help="Ne pas générer automatiquement les légendes après préparation.",
     )
+    parser.add_argument(
+        "--auto-caption",
+        action="store_true",
+        help="Légender avec un VLM (mlx-vlm) au lieu du mode simple.",
+    )
     args = parser.parse_args()
 
     sdir = style_dir(args.style)
@@ -99,7 +104,7 @@ def main() -> None:
         )
 
     if not args.no_caption:
-        generate_captions(args.style, overwrite=True, quiet=False)
+        generate_captions(args.style, overwrite=True, auto=args.auto_caption, quiet=False)
 
     print()
     print(f"Étape suivante : python scripts/train_style.py {args.style}")

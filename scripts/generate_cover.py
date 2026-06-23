@@ -53,15 +53,27 @@ def extract_adapter(checkpoint_zip: Path) -> Path:
     return target
 
 
+def resolve_title_mode(cfg: dict, force_text: bool, force_no_text: bool) -> bool:
+    """Décide si le titre doit être écrit dans l'image.
+
+    Priorité aux flags CLI, sinon on suit la convention `title_text` du style :
+    no -> jamais écrit, yes/mixed -> écrit par défaut.
+    """
+    if force_no_text:
+        return False
+    if force_text:
+        return True
+    return cfg.get("title_text", "mixed") != "no"
+
+
 def build_prompt(cfg: dict, title: str, extra: str, title_as_text: bool) -> str:
-    parts = [cfg["base_prompt"], cfg["trigger"]]
+    # Le trigger en tête déclenche tout l'univers appris (couleurs, ambiance, typo).
+    parts = [cfg["trigger"], cfg["class_word"]]
     if title:
         if title_as_text:
-            parts.append(f'album cover with the title text "{title}"')
+            parts.append(f'with the title text "{title}"')
         else:
-            parts.append(f'album cover inspired by "{title}"')
-    else:
-        parts.append("album cover")
+            parts.append(f'inspired by "{title}"')
     if extra:
         parts.append(extra)
     return ", ".join(p for p in parts if p)
@@ -75,7 +87,13 @@ def main() -> None:
     parser.add_argument(
         "--no-title-text",
         action="store_true",
-        help="Ne pas demander d'écrire le titre dans l'image (titre = thème seulement).",
+        help="Forcer : ne pas écrire le titre dans l'image (titre = thème seulement).",
+    )
+    parser.add_argument(
+        "--title-text",
+        dest="force_title_text",
+        action="store_true",
+        help="Forcer : écrire le titre dans l'image (outrepasse title_text=no du style).",
     )
     parser.add_argument("--steps", type=int, default=25, help="Pas d'inférence (défaut 25).")
     parser.add_argument("--guidance", type=float, default=3.5, help="Guidance scale (défaut 3.5).")
@@ -110,8 +128,9 @@ def main() -> None:
             )
     adapter = extract_adapter(ckpt)
 
-    # 2. Construire le prompt
-    prompt = build_prompt(cfg, args.title, args.extra, not args.no_title_text)
+    # 2. Construire le prompt (le mode titre suit la convention du style sauf override)
+    title_as_text = resolve_title_mode(cfg, args.force_title_text, args.no_title_text)
+    prompt = build_prompt(cfg, args.title, args.extra, title_as_text)
 
     # 3. Chemin de sortie
     if args.output:

@@ -39,6 +39,17 @@ def main() -> None:
         default="dev",
         help="Modèle de base mflux (dev = FLUX.1 [dev], défaut).",
     )
+    parser.add_argument(
+        "--class-word",
+        default="album cover",
+        help="Ce que SONT les images (ancrage sémantique). Ex: 'phonk album cover'.",
+    )
+    parser.add_argument(
+        "--title-text",
+        default="mixed",
+        choices=["yes", "no", "mixed"],
+        help="Convention de titre du style : yes=titre écrit, no=jamais, mixed=les deux.",
+    )
     args = parser.parse_args()
 
     style = slugify(args.style)
@@ -61,6 +72,8 @@ def main() -> None:
         "description": args.description,
         "base_prompt": args.base_prompt,
         "base_model": args.base_model,
+        "class_word": args.class_word,
+        "title_text": args.title_text,
     }
     with open(sdir / "style.yaml", "w", encoding="utf-8") as f:
         yaml.safe_dump(style_yaml, f, allow_unicode=True, sort_keys=False)

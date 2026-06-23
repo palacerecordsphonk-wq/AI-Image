@@ -3,11 +3,19 @@
 
 name: _TEMPLATE
 # Mot-déclencheur UNIQUE qui sera appris par le LoRA et réutilisé à la génération.
+# C'est lui qui "absorbe" tout l'univers du style (couleurs, ambiance, grain, typo).
 # Choisis quelque chose qui n'existe pas en anglais courant (ex: phonkcover_style).
 trigger: template_style
 # Description libre, juste pour ta mémoire.
 description: "Décris ici l'esthétique de ce style (couleurs, ambiance, références)."
-# Phrase de base injectée dans CHAQUE prompt (entraînement + génération).
+# Phrase de base (utilisée comme repli ; le captioning s'appuie surtout sur class_word).
 base_prompt: "album cover art, high quality"
+# Ancrage sémantique : ce que SONT les images. Ex: "dark phonk album cover".
+class_word: "album cover"
+# Convention de titre du style :
+#   yes   -> toutes les covers ont un titre écrit (le LoRA apprend la typographie)
+#   no    -> jamais de titre (le LoRA apprend l'absence de texte)
+#   mixed -> les deux (utilise --auto au captioning pour détecter au cas par cas)
+title_text: mixed
 # Modèle de base mflux : 'dev' = FLUX.1 [dev] (recommandé).
 base_model: dev

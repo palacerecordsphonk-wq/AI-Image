@@ -67,6 +67,14 @@ def load_style(style: str) -> dict:
     data.setdefault("description", "")
     data.setdefault("base_prompt", "album cover art")
     data.setdefault("base_model", "dev")  # FLUX.1 [dev] par défaut
+    # Ancrage sémantique : ce que SONT les images (aide le modèle à situer le style).
+    data.setdefault("class_word", "album cover")
+    # Convention de titre du style : "yes" (titre écrit), "no" (jamais de titre),
+    # "mixed" (les deux). Pilote le captioning ET le comportement par défaut à la génération.
+    title_text = str(data.get("title_text", "mixed")).lower()
+    if title_text not in {"yes", "no", "mixed"}:
+        title_text = "mixed"
+    data["title_text"] = title_text
     return data
 
 

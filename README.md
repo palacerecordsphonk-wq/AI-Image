@@ -13,6 +13,10 @@ Pipeline **100 % local sur Mac Apple Silicon** pour entraîner une IA d'image su
 > mélangent, te laisse en ré-entraîner un sans toucher aux autres, et tu peux même
 > combiner deux styles à la génération (`--lora-scale`).
 
+> 📖 **Pour bien faire apprendre tout l'univers d'un style** (couleurs, ambiance,
+> compo, typographie) et obtenir des covers cohérentes : lis le
+> [**guide de méthode**](docs/GUIDE.md). C'est le document le plus important du repo.
+
 ---
 
 ## 🖥️ Prérequis
@@ -36,15 +40,19 @@ Au premier lancement, mflux télécharge FLUX.1 [dev] depuis Hugging Face
 ## 🚀 Démarrage rapide
 
 ```bash
-# 1) Créer un style
+# 1) Créer un style (class-word = ancrage ; title-text = convention de titre)
 python scripts/new_style.py phonk \
   --description "phonk sombre, grain cassette, contraste élevé" \
-  --base-prompt "dark phonk album cover, vintage grain, high contrast"
+  --base-prompt "dark phonk album cover, vintage grain, high contrast" \
+  --class-word "dark phonk album cover" \
+  --title-text mixed          # yes = titre toujours écrit, no = jamais, mixed = les deux
 
 # 2) Déposer tes images dans styles/phonk/raw/  (jpg / png / webp)
 
 # 3) Préparer le dataset (redimensionne + crée les légendes)
 python scripts/prepare_dataset.py phonk
+#    Variante : --auto-caption  -> légende chaque image avec un VLM (capte les
+#    variations internes + détecte le titre). Nécessite : pip install mlx-vlm
 
 # 4) Entraîner le LoRA du style  (plusieurs heures ; 768px = + rapide)
 python scripts/train_style.py phonk
@@ -119,9 +127,16 @@ Voir [`prompts/templates.md`](prompts/templates.md) pour des exemples.
 **Combien d'images par style ?** Minimum ~15, idéalement **30 à 150**. Inutile d'aller
 au-delà de quelques centaines pour un style. Un dossier vide ne peut rien apprendre.
 
-**Faut-il légender chaque image ?** Non, c'est automatique : une légende cohérente
-contenant le mot-déclencheur du style est générée pour chaque image. Tu peux
-éditer les `.txt` dans `dataset/` pour affiner, puis relancer l'entraînement.
+**Faut-il légender chaque image ?** Non, c'est automatique. En mode simple, une
+légende minimale et cohérente (`trigger + class_word`) est générée pour chaque
+image — c'est ce qui fait « fondre » tout l'univers du style dans le trigger. Pour
+les styles variés ou avec titres, le mode `--auto-caption` (VLM) décrit chaque
+image et détecte le texte. Détails et stratégie : [docs/GUIDE.md](docs/GUIDE.md).
+
+**Comment lui faire apprendre la façon d'écrire les titres (ou l'absence de titre) ?**
+Via `title_text` dans `style.yaml` (`yes` / `no` / `mixed`). Le LoRA apprend alors
+la typographie du style (ou le look sans texte), et la génération s'y conforme par
+défaut. Voir la section 4 du guide.
 
 **Combien de temps / quel coût ?** 100 % local et gratuit. Compte plusieurs heures
 d'entraînement par style sur M4 Pro (moins à 768px). La génération d'une cover

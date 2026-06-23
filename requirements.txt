@@ -7,3 +7,8 @@
 mflux>=0.18.0      # génération + entraînement LoRA natif Apple Silicon
 Pillow>=10.0.0     # préparation/redimensionnement des images
 PyYAML>=6.0        # lecture des fichiers style.yaml
+
+# Optionnel : auto-captioning par IA (scripts/caption.py --auto).
+# À installer séparément si tu veux ce mode :  pip install mlx-vlm
+# mlx-vlm>=0.1.0
+
