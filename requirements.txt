@@ -1,0 +1,9 @@
+# Dépendances du projet AI-Image (covers de musique par style)
+#
+# IMPORTANT : à installer sur ton Mac Apple Silicon (M4 Pro).
+# mflux fournit FLUX.1/FLUX.2/Z-Image en natif Metal (MLX) + l'entraînement LoRA.
+# Il ne s'installe QUE sur macOS Apple Silicon (il dépend de `mlx`).
+
+mflux>=0.18.0      # génération + entraînement LoRA natif Apple Silicon
+Pillow>=10.0.0     # préparation/redimensionnement des images
+PyYAML>=6.0        # lecture des fichiers style.yaml

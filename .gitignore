@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Datasets bruts et préparés (lourds — restent en local)
+styles/*/raw/
+styles/*/dataset/
+# ...mais on garde la structure d'exemple et les métadonnées de style
+!styles/_TEMPLATE/
+!styles/**/style.yaml
+
+# Sorties d'entraînement (checkpoints LoRA volumineux)
+styles/*/training/
+*.safetensors
+*_checkpoint.zip
+
+# Covers générées
+output/
+*.png
+!docs/**/*.png
+
+# Caches mflux / HuggingFace
+.cache/
+.mflux/
+
+# macOS
+.DS_Store

@@ -1,0 +1,13 @@
+# Modèle de fichier de style. Copié automatiquement par new_style.py.
+# Un dossier = un style musical = un LoRA.
+
+name: _TEMPLATE
+# Mot-déclencheur UNIQUE qui sera appris par le LoRA et réutilisé à la génération.
+# Choisis quelque chose qui n'existe pas en anglais courant (ex: phonkcover_style).
+trigger: template_style
+# Description libre, juste pour ta mémoire.
+description: "Décris ici l'esthétique de ce style (couleurs, ambiance, références)."
+# Phrase de base injectée dans CHAQUE prompt (entraînement + génération).
+base_prompt: "album cover art, high quality"
+# Modèle de base mflux : 'dev' = FLUX.1 [dev] (recommandé).
+base_model: dev
