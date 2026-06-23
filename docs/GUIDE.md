@@ -79,13 +79,23 @@ Tu peux toujours **éditer les `.txt`** dans `dataset/` à la main avant d'entra
 
 ## 4. Titre & typographie
 
-Réglé par `title_text` dans `style.yaml` :
+### Le titre vient du NOM DE FICHIER (pas deviné)
+Quand tu télécharges via Spotify, les fichiers sont nommés « Artiste - Titre ».
+À la préparation, l'artiste est retiré : **le nom du fichier devient le titre du
+morceau** (`MONTAGEM ALQUIMIA.png`). Ce titre est la « vérité » : au lieu de faire
+deviner les lettres au modèle (souvent cachées/partielles/répétées sur les covers),
+on lui **donne** le titre, et le VLM dit seulement s'il est présent et **comment**
+il est écrit. Le LoRA apprend donc la vraie façon dont le style écrit ses titres.
 
+> Concrètement : pour `MONTAGEM ALQUIMIA.png`, la légende devient par ex.
+> `funk_style, funk album cover, neon purple retro, with the title text "MONTAGEM ALQUIMIA", bold repeated glitch font`.
+
+### Réglage `title_text` dans `style.yaml`
 | Valeur | Le LoRA apprend… | À la génération (défaut) |
 |---|---|---|
 | `no` | l'absence de texte (look « sans titre ») | n'écrit pas le titre |
 | `yes` | la **typographie** du style (police, place, style) | écrit le titre dans ce style |
-| `mixed` | les deux (mieux avec `--auto`) | écrit le titre |
+| `mixed` | les deux — le VLM décide image par image (avec `--auto`) | écrit le titre |
 
 - **Style sans titre** (`no`) : le LoRA produit des covers propres sans texte, et
   `generate_cover.py` n'écrit pas le titre (le titre sert juste de thème).

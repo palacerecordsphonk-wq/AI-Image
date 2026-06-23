@@ -15,15 +15,22 @@ D'où deux modes :
        "<trigger>, <class_word>[, with stylized title text]"
    Tout l'univers visuel se fond dans le trigger. Idéal pour un style très cohérent.
 
-2) Mode AUTO (--auto) — un VLM (Qwen2.5-VL via mlx-vlm) décrit chaque image et
-   détecte la présence/le contenu du titre. La légende garde TOUJOURS le trigger
-   en tête, mais ajoute une description -> capte les variations internes au style
-   et améliore le rendu du texte. (Mac Apple Silicon uniquement.)
+2) Mode AUTO (--auto) — un VLM (Qwen2.5-VL via mlx-vlm) décrit chaque image. La
+   légende garde TOUJOURS le trigger en tête, ajoute une description -> capte les
+   variations internes au style. (Mac Apple Silicon uniquement.)
+
+LE TITRE VIENT DU NOM DE FICHIER
+--------------------------------
+Le nom du fichier préparé EST le titre du morceau (l'artiste a été retiré par
+prepare_dataset). On ne fait donc PAS deviner le texte au modèle : on lui DONNE
+le titre connu, et le VLM dit seulement s'il est présent sur la cover et COMMENT
+il est écrit (style, placement, partiel, caché, répété…). Le LoRA apprend ainsi
+la typographie réelle du style, sans halluciner les lettres.
 
 La présence de titre est pilotée par `title_text` dans style.yaml :
-   yes  -> toutes les covers ont un titre écrit
+   yes  -> le titre est toujours écrit (légende = titre exact + style d'écriture)
    no   -> jamais de titre (le LoRA apprend "pas de texte")
-   mixed-> les deux (utilise --auto pour détecter au cas par cas)
+   mixed-> les deux (utilise --auto : le VLM décide image par image)
 
 Utilisation :
     python scripts/caption.py phonk                 # mode simple
@@ -52,22 +59,41 @@ TITLE_NOTE = {
     "mixed": "",  # géré image par image en mode --auto
 }
 
-VLM_PROMPT = (
-    "You are labeling an album cover for training an image model. "
+# On DONNE le titre connu (= nom du fichier) au VLM, au lieu de lui faire deviner
+# les lettres. Il juge la PRÉSENCE et décrit le STYLE d'écriture du titre.
+VLM_PROMPT_TMPL = (
+    'This album cover is for a track titled "{title}". '
     "Reply with ONLY a compact JSON object, no extra text, with keys: "
-    '"caption" (a short phrase describing colors, mood, subject and composition, '
-    "max 20 words, do NOT mention the artist or invent text), "
-    '"has_title_text" (true/false: is there visible title/artist text on the cover), '
-    '"title_text" (the exact visible title text, or empty string).'
+    '"caption" (short phrase: colors, mood, subject, composition; max 20 words; '
+    "do NOT transcribe any text), "
+    '"has_title" (true/false: is that title text visibly written anywhere on the '
+    "cover, even partially, stylized, hidden or repeated?), "
+    '"title_style" (if has_title: a few words on HOW it is rendered — font style, '
+    "placement, size, color, partial, repeated, hidden, glitched; else empty)."
 )
 
 
-def _build_simple_caption(cfg: dict, caption: str | None) -> str:
-    """Légende minimale et cohérente (mode simple)."""
+def _show_title(cfg: dict, vlm_has_title: bool) -> bool:
+    """Décide si le titre doit figurer dans la légende, selon la convention du style."""
+    tt = cfg["title_text"]
+    if tt == "yes":
+        return True
+    if tt == "no":
+        return False
+    return vlm_has_title  # mixed -> ce que voit le VLM
+
+
+def _build_simple_caption(cfg: dict, title: str, caption: str | None) -> str:
+    """Légende minimale (mode simple), avec le vrai titre si le style en a."""
     if caption:
-        return caption.format(trigger=cfg["trigger"], base_prompt=cfg["base_prompt"], class_word=cfg["class_word"])
-    base = f"{cfg['trigger']}, {cfg['class_word']}"
-    return base + TITLE_NOTE.get(cfg["title_text"], "")
+        return caption.format(trigger=cfg["trigger"], base_prompt=cfg["base_prompt"],
+                              class_word=cfg["class_word"], title=title)
+    parts = [cfg["trigger"], cfg["class_word"]]
+    # En mode simple on ne "voit" pas l'image : on ajoute le titre seulement si le
+    # style l'écrit toujours (yes). En "mixed", préférer --auto.
+    if cfg["title_text"] == "yes" and title:
+        parts.append(f'with the title text "{title}"')
+    return ", ".join(parts)
 
 
 def _extract_json(text: str) -> dict | None:
@@ -81,19 +107,18 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
-def _vlm_caption(image_path, cfg: dict, model: str) -> str:
-    """Décrit une image avec un VLM et construit la légende finale.
+def _vlm_caption(image_path, cfg: dict, title: str, model: str) -> str:
+    """Décrit une image avec un VLM, en lui FOURNISSANT le titre connu.
 
-    Garde TOUJOURS le trigger en tête pour lier le style. La présence de texte
-    respecte title_text (yes/no force, mixed = ce que détecte le VLM).
+    Le VLM ne devine pas le texte : on lui donne le titre (nom du fichier) et il
+    indique s'il est présent et COMMENT il est écrit. Le trigger reste en tête.
     """
-    exe = "mlx_vlm.generate"
     cmd = [
-        sys.executable, "-m", exe,
+        sys.executable, "-m", "mlx_vlm.generate",
         "--model", model,
-        "--max-tokens", "150",
+        "--max-tokens", "180",
         "--temperature", "0.2",
-        "--prompt", VLM_PROMPT,
+        "--prompt", VLM_PROMPT_TMPL.format(title=title),
         "--image", str(image_path),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -106,15 +131,12 @@ def _vlm_caption(image_path, cfg: dict, model: str) -> str:
     if desc:
         parts.append(desc)
 
-    # Gestion du titre selon la convention du style.
-    tt = cfg["title_text"]
-    has_text = bool(data.get("has_title_text")) if tt == "mixed" else (tt == "yes")
-    if has_text:
-        title = str(data.get("title_text", "")).strip()
-        if title:
-            parts.append(f'with title text "{title}"')
-        else:
-            parts.append("with stylized title text")
+    if _show_title(cfg, bool(data.get("has_title"))) and title:
+        note = f'with the title text "{title}"'
+        style = str(data.get("title_style", "")).strip().strip(".")
+        if style:
+            note += f", {style}"
+        parts.append(note)
     return ", ".join(p for p in parts if p)
 
 
@@ -149,17 +171,19 @@ def generate_captions(
         txt = img.with_suffix(".txt")
         if txt.exists() and not overwrite:
             continue
+        # Le nom de fichier (sans extension) EST le titre du morceau.
+        title = img.stem
         if auto:
             try:
-                text = _vlm_caption(img, cfg, vlm_model)
+                text = _vlm_caption(img, cfg, title, vlm_model)
             except Exception as exc:  # repli sur la légende simple en cas d'échec
                 if not quiet:
                     print(f"⚠️  VLM KO sur {img.name} ({exc}); légende simple utilisée.")
-                text = _build_simple_caption(cfg, caption)
+                text = _build_simple_caption(cfg, title, caption)
             if not quiet:
                 print(f"   [{i}/{len(images)}] {img.name} -> {text}")
         else:
-            text = _build_simple_caption(cfg, caption)
+            text = _build_simple_caption(cfg, title, caption)
         txt.write_text(text + "\n", encoding="utf-8")
         written += 1
 
@@ -177,7 +201,8 @@ def generate_captions(
         mode = "AUTO (VLM)" if auto else "simple"
         print(f"✅ {written} légende(s) écrite(s) dans {dataset} [mode {mode}]")
         if not auto:
-            print(f"   Texte : « {_build_simple_caption(cfg, caption)} »")
+            example = _build_simple_caption(cfg, "<titre>", caption)
+            print(f"   Modèle : « {example} »")
         if skipped:
             print(f"   ({skipped} déjà présentes ; --overwrite pour les remplacer)")
     return written

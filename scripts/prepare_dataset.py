@@ -21,7 +21,8 @@ import argparse
 from PIL import Image, ImageOps
 
 from caption import generate_captions
-from lib import IMAGE_EXTS, die, find_images, style_dir
+from lib import (IMAGE_EXTS, die, find_images, safe_filename, style_dir,
+                 title_from_filename)
 
 # Quantité minimale d'images conseillée pour qu'un style s'apprenne correctement.
 MIN_RECOMMENDED = 15
@@ -81,15 +82,24 @@ def main() -> None:
             old.unlink()
 
     count = 0
+    used_names: set[str] = set()
     for src in sources:
         try:
             with Image.open(src) as im:
                 im = ImageOps.exif_transpose(im)  # respecte l'orientation EXIF
                 im = im.convert("RGB")
                 im = resize_keep_ratio(im, args.size)
+                # Nom du dataset = TITRE seul (artiste retiré). Ce titre servira
+                # de "vérité" au captioning : l'IA saura quel texte chercher sur la cover.
+                title = safe_filename(title_from_filename(src.name))
+                stem = title
+                n = 1
+                while stem.lower() in used_names:
+                    stem = f"{title} ({n})"
+                    n += 1
+                used_names.add(stem.lower())
                 count += 1
-                out = dataset_dir / f"img_{count:04d}.png"
-                im.save(out, "PNG")
+                im.save(dataset_dir / f"{stem}.png", "PNG")
         except Exception as exc:  # image corrompue / format exotique
             print(f"⚠️  Ignorée ({src.name}) : {exc}")
 

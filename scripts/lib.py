@@ -34,6 +34,29 @@ def slugify(text: str) -> str:
     return text.strip("_")
 
 
+def title_from_filename(filename: str) -> str:
+    """Extrait le TITRE depuis un nom de fichier 'Artiste - Titre'.
+
+    On coupe au PREMIER ' - ' : avant = artiste(s), après = titre (qui peut
+    lui-même contenir des ' - ', ex. 'BAILA LENTO - Slowed'). S'il n'y a pas de
+    ' - ', on renvoie le nom tel quel.
+    """
+    stem = Path(filename).stem
+    if " - " in stem:
+        return stem.split(" - ", 1)[1].strip()
+    return stem.strip()
+
+
+def safe_filename(name: str, max_len: int = 120) -> str:
+    """Nom de fichier lisible et sûr : garde accents/casse/espaces, retire l'illégal."""
+    name = re.sub(r'[\\/:*?"<>|]', "", name).strip()
+    name = re.sub(r"\s+", " ", name)
+    name = name.strip(" .")
+    if len(name) > max_len:
+        name = name[:max_len].rstrip()
+    return name or "cover"
+
+
 def style_dir(style: str) -> Path:
     """Chemin du dossier d'un style donné."""
     return STYLES_DIR / style
