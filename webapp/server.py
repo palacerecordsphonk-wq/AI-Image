@@ -186,9 +186,13 @@ class TrainReq(BaseModel):
 
 class SpotifyReq(BaseModel):
     url: str
-    dest: str
     client_id: str
     client_secret: str
+    # Destination = le dossier raw/ d'un style. Soit un style existant, soit un
+    # nouveau à créer.
+    style: str | None = None          # style existant
+    new_style: str | None = None      # nom d'un nouveau style à créer
+    new_title_text: str = "mixed"     # convention de titre du nouveau style
     with_artist: bool = False
 
 
@@ -375,19 +379,37 @@ def api_generate(req: GenerateReq) -> dict:
 
 @app.post("/api/spotify/download")
 def api_spotify(req: SpotifyReq) -> dict:
-    if not req.url.strip() or not req.dest.strip():
-        raise HTTPException(400, "Lien de playlist et dossier de destination requis.")
+    if not req.url.strip():
+        raise HTTPException(400, "Lien de playlist requis.")
     if not req.client_id.strip() or not req.client_secret.strip():
         raise HTTPException(400, "Client ID et Client Secret Spotify requis.")
+
+    # Déterminer le style cible (existant ou nouveau) -> destination = son raw/.
+    if req.new_style and req.new_style.strip():
+        name = lib.slugify(req.new_style)
+        if not name:
+            raise HTTPException(400, "Nom de nouveau style invalide.")
+        if name in lib.list_styles():
+            raise HTTPException(409, f"Le style '{name}' existe déjà.")
+        title_text = req.new_title_text if req.new_title_text in {"yes", "no", "mixed"} else "mixed"
+        lib.create_style(name, class_word=f"{name} album cover", title_text=title_text)
+        target = name
+    elif req.style and req.style.strip():
+        target = req.style.strip()
+        _require_style(target)
+    else:
+        raise HTTPException(400, "Choisis un style existant ou crée un nouveau style.")
+
+    dest = lib.style_dir(target) / "raw"
     cmd = [
         PYTHON, str(SCRIPTS / "spotify_covers.py"), req.url.strip(),
-        "--dest", req.dest.strip(),
+        "--dest", str(dest),
         "--client-id", req.client_id.strip(),
         "--client-secret", req.client_secret.strip(),
     ]
     if req.with_artist:
         cmd.append("--with-artist")
-    job = jobs.start("download", cmd)
+    job = jobs.start("download", cmd, style=target)
     return job_dict(job)
 
 

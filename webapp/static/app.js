@@ -284,19 +284,29 @@ $("#btnGenerate").onclick = async () => {
 };
 
 // ----- Spotify ---------------------------------------------------------------
+let spMode = "existing";
+
 async function loadSpotifyStyles() {
   const styles = await api("GET", "/api/styles");
   const sel = $("#spStyle");
-  sel.innerHTML = `<option value="">— choisir un style (optionnel) —</option>` +
-    styles.map((s) => `<option value="${s.raw_path}">${s.name} (raw/)</option>`).join("");
+  sel.innerHTML = `<option value="">— choisir un style —</option>` +
+    styles.map((s) => `<option value="${s.name}">${s.name} (${s.raw_count} img)</option>`).join("");
+  // si aucun style, bascule sur "nouveau"
+  if (!styles.length) setSpMode("new");
   // restaure les clés mémorisées
   $("#spId").value = localStorage.getItem("sp_id") || "";
   $("#spSecret").value = localStorage.getItem("sp_secret") || "";
 }
 
-$("#spStyle").addEventListener("change", (e) => {
-  if (e.target.value) $("#spDest").value = e.target.value;
-});
+function setSpMode(mode) {
+  spMode = mode;
+  $("#spModeExisting").classList.toggle("active", mode === "existing");
+  $("#spModeNew").classList.toggle("active", mode === "new");
+  $("#spExistingPane").style.display = mode === "existing" ? "block" : "none";
+  $("#spNewPane").style.display = mode === "new" ? "block" : "none";
+}
+$("#spModeExisting").onclick = () => setSpMode("existing");
+$("#spModeNew").onclick = () => setSpMode("new");
 
 $("#spSaveKeys").onclick = () => {
   localStorage.setItem("sp_id", $("#spId").value.trim());
@@ -307,13 +317,19 @@ $("#spSaveKeys").onclick = () => {
 $("#btnSpotify").onclick = async () => {
   const body = {
     url: $("#spUrl").value.trim(),
-    dest: $("#spDest").value.trim(),
     client_id: $("#spId").value.trim(),
     client_secret: $("#spSecret").value.trim(),
     with_artist: $("#spArtist").checked,
   };
+  if (spMode === "new") {
+    body.new_style = $("#spNewName").value.trim();
+    body.new_title_text = $("#spNewTitle").value;
+    if (!body.new_style) return toast("Donne un nom au nouveau style.", true);
+  } else {
+    body.style = $("#spStyle").value;
+    if (!body.style) return toast("Choisis un style existant.", true);
+  }
   if (!body.url) return toast("Colle un lien de playlist.", true);
-  if (!body.dest) return toast("Indique un dossier de destination.", true);
   if (!body.client_id || !body.client_secret) return toast("Renseigne tes clés Spotify (à droite).", true);
   // mémorise les clés au passage
   localStorage.setItem("sp_id", body.client_id);
@@ -327,6 +343,8 @@ $("#btnSpotify").onclick = async () => {
         $("#btnSpotify").disabled = false;
         toast(j.status === "done" ? "Téléchargement terminé ✓" : "Téléchargement : " + j.status, j.status !== "done");
         loadStyles();
+        loadSpotifyStyles();
+        if (j.status === "done" && j.style) { setSpMode("existing"); $("#spStyle").value = j.style; }
       },
     });
   } catch (e) { toast(e.message, true); $("#btnSpotify").disabled = false; }

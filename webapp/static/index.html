@@ -91,13 +91,28 @@
           <label>Lien de la playlist Spotify</label>
           <input type="text" id="spUrl" placeholder="https://open.spotify.com/playlist/…" />
 
-          <label>Dossier de destination</label>
-          <input type="text" id="spDest" placeholder="/Users/toi/Desktop/covers_funk" />
-          <label>…ou télécharger directement dans un style</label>
-          <select id="spStyle"><option value="">— choisir un style (optionnel) —</option></select>
-          <div class="hint">Choisir un style remplit le chemin avec son dossier d'images (raw/).</div>
+          <label>Où ranger les covers ?</label>
+          <div class="tabs" style="margin:6px 0 4px">
+            <div class="tab active" id="spModeExisting" data-mode="existing">Style existant</div>
+            <div class="tab" id="spModeNew" data-mode="new">＋ Nouveau style</div>
+          </div>
 
-          <div class="checkbox"><input type="checkbox" id="spArtist" />
+          <div id="spExistingPane">
+            <select id="spStyle"><option value="">— choisir un style —</option></select>
+          </div>
+
+          <div id="spNewPane" style="display:none">
+            <input type="text" id="spNewName" placeholder="Nom du nouveau style (ex: funk)" />
+            <label>Titre écrit sur les covers ?</label>
+            <select id="spNewTitle">
+              <option value="mixed">Mixte — l'IA détecte (recommandé)</option>
+              <option value="yes">Oui, toujours un titre</option>
+              <option value="no">Non, jamais de titre</option>
+            </select>
+          </div>
+          <div class="hint">Les images iront dans <b>styles/&lt;style&gt;/raw/</b> — prêtes pour le fine-tune.</div>
+
+          <div class="checkbox" style="margin-top:14px"><input type="checkbox" id="spArtist" />
             <span>Nommer « Artiste - Titre » (sinon : Titre seul)</span></div>
 
           <div class="btn-row"><button class="big" id="btnSpotify">⬇️ Télécharger les covers</button></div>

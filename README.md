@@ -54,16 +54,17 @@ Quatre onglets :
   upload), prépare + auto-captioning IA, puis entraîne le LoRA. Journal en direct.
 - **🎨 Génération** — choisis le style, écris le titre + une description, règle les
   options, génère, et vois l'image apparaître.
-- **⬇️ Spotify** — colle un lien de playlist Spotify + un dossier de destination :
-  télécharge toutes les covers de la playlist, nommées d'après le titre du morceau.
-  Pratique pour constituer un dataset (tu peux viser directement le dossier d'un style).
+- **⬇️ Spotify** — colle un lien de playlist Spotify et choisis **un style existant**
+  (les covers s'y ajoutent) ou **crée un nouveau style** (le dossier est créé dans le
+  projet). Toutes les covers sont téléchargées dans `styles/<style>/raw/`, nommées
+  d'après le titre du morceau — prêtes pour le fine-tune.
 - **🖼️ Galerie** — toutes tes images générées.
 
 > 🔑 **Pour le téléchargement Spotify**, il faut une clé développeur Spotify
 > gratuite (Client ID + Secret) — aucune connexion à ton compte. Crée une app sur
 > [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), puis
 > colle les clés dans l'onglet Spotify (elles sont mémorisées dans le navigateur).
-> En CLI : `python scripts/spotify_covers.py "<lien>" --dest <dossier> --client-id ID --client-secret SECRET`
+> En CLI (vers un dossier libre) : `python scripts/spotify_covers.py "<lien>" --dest <dossier> --client-id ID --client-secret SECRET`
 
 Tout tourne en local. Le reste de ce README décrit les outils en ligne de commande
 équivalents (utiles pour scripter), mais l'interface web suffit pour tout faire.
