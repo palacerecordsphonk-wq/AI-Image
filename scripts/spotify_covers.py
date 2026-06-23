@@ -84,14 +84,9 @@ def itunes_upscale_url(url: str, res: int) -> str:
     return re.sub(r"/\d+x\d+bb\.(jpg|jpeg|png)", f"/{res}x{res}bb.\\1", url)
 
 
-def unique_path(dest: Path, stem: str, ext: str) -> Path:
-    """Évite d'écraser : ajoute _1, _2… si le nom existe déjà."""
-    candidate = dest / f"{stem}{ext}"
-    i = 1
-    while candidate.exists():
-        candidate = dest / f"{stem}_{i}{ext}"
-        i += 1
-    return candidate
+def existing_with_stem(dest: Path, stem: str) -> bool:
+    """Vrai si une image de même nom (toute extension) existe déjà -> doublon."""
+    return any((dest / f"{stem}{ext}").exists() for ext in IMAGE_EXTS_OK)
 
 
 # --------------------------------------------------------------------------- #
@@ -191,7 +186,7 @@ def download_image(url: str, target: Path) -> None:
 # Orchestration
 # --------------------------------------------------------------------------- #
 def run(url: str, dest: Path, client_id: str, client_secret: str, *,
-        with_artist: bool = False, hq: bool = True, res: int = 3000,
+        with_artist: bool = True, hq: bool = True, res: int = 3000,
         itunes_delay: float = 0.3) -> int:
     playlist_id = parse_playlist_id(url)
     dest.mkdir(parents=True, exist_ok=True)
@@ -204,7 +199,9 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
 
     downloaded = 0
     skipped = 0
+    duplicates = 0
     hires_hits = 0
+    seen_stems: set[str] = set()  # doublons à l'intérieur du même téléchargement
     itunes_cache: dict[tuple, str | None] = {}  # (artist, album) -> url HD (ou None)
     tracks = list(iter_playlist_tracks(playlist_id, token))
     total = len(tracks)
@@ -212,6 +209,15 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
 
     for i, (name, artists, album, spotify_cover) in enumerate(tracks, 1):
         label = f"{artists} - {name}" if (with_artist and artists) else name
+        stem = sanitize_filename(label)
+
+        # Dédoublonnage : même morceau déjà présent (téléchargement précédent OU
+        # ce téléchargement) -> on saute, pas de re-téléchargement.
+        if stem in seen_stems or existing_with_stem(dest, stem):
+            print(f"[{i}/{total}] ♻️  doublon ignoré : {stem}")
+            duplicates += 1
+            seen_stems.add(stem)
+            continue
 
         # 1) Tente la haute résolution via iTunes (avec cache par album).
         cover = None
@@ -236,11 +242,11 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
         ext = os.path.splitext(urllib.parse.urlparse(cover).path)[1].lower()
         if ext not in IMAGE_EXTS_OK:
             ext = ".jpg"
-        stem = sanitize_filename(label)
-        target = unique_path(dest, stem, ext)
+        target = dest / f"{stem}{ext}"
         try:
             download_image(cover, target)
             downloaded += 1
+            seen_stems.add(stem)
             if is_hd:
                 hires_hits += 1
             tag = "🟢 HD" if is_hd else "⚪ 640"
@@ -250,7 +256,8 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
             print(f"[{i}/{total}] ⚠️  Échec {label} : {exc}")
 
     print(f"\n🎉 Terminé : {downloaded} cover(s) téléchargée(s) "
-          f"({hires_hits} en HD, {downloaded - hires_hits} en 640px), {skipped} ignorée(s).")
+          f"({hires_hits} en HD, {downloaded - hires_hits} en 640px), "
+          f"{duplicates} doublon(s) ignoré(s), {skipped} sans cover.")
     print(f"   Dans : {dest}")
     return 0
 
@@ -276,8 +283,8 @@ def main() -> None:
     parser.add_argument("--dest", required=False, help="Dossier de destination.")
     parser.add_argument("--client-id", default=os.environ.get("SPOTIFY_CLIENT_ID"))
     parser.add_argument("--client-secret", default=os.environ.get("SPOTIFY_CLIENT_SECRET"))
-    parser.add_argument("--with-artist", action="store_true",
-                        help="Nommer 'Artiste - Titre' au lieu de 'Titre'.")
+    parser.add_argument("--no-artist", action="store_true",
+                        help="Nommer 'Titre' seul (défaut : 'Artiste - Titre').")
     parser.add_argument("--no-hq", action="store_true",
                         help="Désactiver la haute résolution (garder le 640px de Spotify).")
     parser.add_argument("--res", type=int, default=3000,
@@ -301,7 +308,7 @@ def main() -> None:
 
     try:
         rc = run(args.url, Path(args.dest).expanduser(), args.client_id, args.client_secret,
-                 with_artist=args.with_artist, hq=not args.no_hq, res=args.res,
+                 with_artist=not args.no_artist, hq=not args.no_hq, res=args.res,
                  itunes_delay=args.itunes_delay)
     except Exception as exc:
         print(f"❌ {exc}", file=sys.stderr)

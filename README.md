@@ -61,6 +61,9 @@ Quatre onglets :
   **Haute qualité** : par défaut, les pochettes sont récupérées en **~3000px via
   Apple Music** (l'API Spotify est plafonnée à 640px), avec repli automatique sur
   Spotify si une cover n'est pas trouvée en HD.
+  **Nommage & anti-doublons** : les fichiers sont nommés « Artiste - Titre », et un
+  morceau déjà présent dans le style est **ignoré** (pas de re-téléchargement) — pratique
+  si plusieurs playlists partagent des titres.
 - **🖼️ Galerie** — toutes tes images générées.
 
 > 🔑 **Pour le téléchargement Spotify**, il faut une clé développeur Spotify

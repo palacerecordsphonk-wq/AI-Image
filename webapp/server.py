@@ -193,7 +193,7 @@ class SpotifyReq(BaseModel):
     style: str | None = None          # style existant
     new_style: str | None = None      # nom d'un nouveau style à créer
     new_title_text: str = "mixed"     # convention de titre du nouveau style
-    with_artist: bool = False
+    with_artist: bool = True          # nom de fichier "Artiste - Titre" (sinon "Titre")
     hq: bool = True                   # haute résolution via Apple Music (~3000px)
 
 
@@ -408,8 +408,8 @@ def api_spotify(req: SpotifyReq) -> dict:
         "--client-id", req.client_id.strip(),
         "--client-secret", req.client_secret.strip(),
     ]
-    if req.with_artist:
-        cmd.append("--with-artist")
+    if not req.with_artist:
+        cmd.append("--no-artist")
     if not req.hq:
         cmd.append("--no-hq")
     job = jobs.start("download", cmd, style=target)
