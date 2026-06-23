@@ -37,7 +37,31 @@ Au premier lancement, mflux télécharge FLUX.1 [dev] depuis Hugging Face
 
 ---
 
-## 🚀 Le plus simple : l'assistant
+## 🖥️ Interface web (recommandé) — AI-Image Studio
+
+Tout se gère depuis une **interface web locale**, propre et simple : créer un
+style, choisir le dossier d'images, lancer le fine-tune **et** générer des covers,
+avec aperçu et galerie.
+
+```bash
+make web
+# ou : python -m webapp.server
+```
+Puis ouvre **http://127.0.0.1:8000** dans ton navigateur.
+
+Trois onglets :
+- **🎚️ Fine-tune** — crée un style, importe un dossier d'images (par chemin ou
+  upload), prépare + auto-captioning IA, puis entraîne le LoRA. Journal en direct.
+- **🎨 Génération** — choisis le style, écris le titre + une description, règle les
+  options, génère, et vois l'image apparaître.
+- **🖼️ Galerie** — toutes tes images générées.
+
+Tout tourne en local. Le reste de ce README décrit les outils en ligne de commande
+équivalents (utiles pour scripter), mais l'interface web suffit pour tout faire.
+
+---
+
+## 🚀 En ligne de commande : l'assistant
 
 Une seule commande, qui te demande le nom du style et le dossier d'images, puis
 fait TOUT (import → captioning IA → entraînement) :
@@ -109,6 +133,9 @@ AI-Image/
 │   └── lib.py                # helpers partagés
 ├── styles/                   # un sous-dossier par style (voir styles/README.md)
 │   └── _TEMPLATE/            # gabarit d'exemple
+├── webapp/                   # interface web locale (AI-Image Studio)
+│   ├── server.py             # backend FastAPI (pilote les scripts ci-dessus)
+│   └── static/               # frontend (index.html, app.js, style.css)
 ├── prompts/templates.md      # exemples de prompts par style
 ├── output/                   # covers générées (gitignoré)
 ├── requirements.txt

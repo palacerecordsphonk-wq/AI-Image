@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI-Image Studio</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">AI-Image <span>Studio</span></div>
+    <nav class="tabs">
+      <div class="tab active" data-view="finetune">🎚️ Fine-tune</div>
+      <div class="tab" data-view="generate">🎨 Génération</div>
+      <div class="tab" data-view="gallery">🖼️ Galerie</div>
+    </nav>
+    <div class="spacer"></div>
+    <div class="badge-job" id="jobBadge"><span class="dot"></span><span id="jobBadgeText">tâche en cours…</span></div>
+  </header>
+
+  <main>
+    <!-- ======================= FINE-TUNE ======================= -->
+    <section class="view active" id="view-finetune">
+      <div class="grid-2">
+        <!-- Liste des styles -->
+        <div>
+          <div class="card">
+            <div class="step-title"><h2>Tes styles</h2></div>
+            <div id="styleList"></div>
+            <button class="big" id="btnNewStyle">＋ Nouveau style</button>
+          </div>
+        </div>
+
+        <!-- Détail du style sélectionné -->
+        <div id="styleDetail">
+          <div class="card"><div class="empty">Sélectionne un style à gauche, ou crée-en un nouveau.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= GÉNÉRATION ======================= -->
+    <section class="view" id="view-generate">
+      <div class="gen-grid">
+        <div class="card">
+          <div class="step-title"><h2>Créer une cover</h2></div>
+          <label>Style</label>
+          <select id="genStyle"></select>
+          <label>Titre du morceau</label>
+          <input type="text" id="genTitle" placeholder="Ex : Midnight Drive" />
+          <label>Description / prompt (ambiance, couleurs, éléments…)</label>
+          <textarea id="genExtra" placeholder="Ex : néons tokyo, pluie, cinématique, voiture rétro"></textarea>
+
+          <label>Titre écrit dans l'image</label>
+          <select id="genTitleMode">
+            <option value="auto">Auto (selon le style)</option>
+            <option value="text">Oui, écrire le titre</option>
+            <option value="notext">Non, pas de texte</option>
+          </select>
+
+          <div class="row-inputs three">
+            <div><label>Largeur</label><input type="number" id="genW" value="1024" step="64" /></div>
+            <div><label>Hauteur</label><input type="number" id="genH" value="1024" step="64" /></div>
+            <div><label>Steps</label><input type="number" id="genSteps" value="25" /></div>
+          </div>
+          <div class="row-inputs three">
+            <div><label>Guidance</label><input type="number" id="genGuid" value="3.5" step="0.5" /></div>
+            <div><label>Force style</label><input type="number" id="genScale" value="1.0" step="0.1" /></div>
+            <div><label>Seed (vide=aléa)</label><input type="number" id="genSeed" placeholder="—" /></div>
+          </div>
+          <button class="big" id="btnGenerate" style="margin-top:16px">🎨 Générer</button>
+          <div id="genStatus"></div>
+          <div class="log" id="genLog" style="display:none"></div>
+        </div>
+
+        <div>
+          <div class="preview" id="genPreview">
+            <div class="placeholder">L'image générée apparaîtra ici.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= GALERIE ======================= -->
+    <section class="view" id="view-gallery">
+      <div class="card">
+        <div class="step-title"><h2>Toutes tes générations</h2></div>
+        <div class="gallery" id="galleryGrid"></div>
+        <div class="empty" id="galleryEmpty" style="display:none">Aucune image générée pour l'instant.</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal nouveau style -->
+  <div class="modal-bg" id="modalNew">
+    <div class="modal">
+      <h2>Nouveau style</h2>
+      <label>Nom du style</label>
+      <input type="text" id="nsName" placeholder="rock, funk, ambiance…" />
+      <label>Que sont ces covers ? (ancrage)</label>
+      <input type="text" id="nsClass" placeholder="ex : rock album cover" />
+      <label>Titre écrit sur les covers ?</label>
+      <select id="nsTitle">
+        <option value="mixed">Mixte — l'IA détecte (recommandé)</option>
+        <option value="yes">Oui, toujours un titre</option>
+        <option value="no">Non, jamais de titre</option>
+      </select>
+      <div class="btn-row">
+        <button id="nsCreate">Créer</button>
+        <button class="ghost" id="nsCancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

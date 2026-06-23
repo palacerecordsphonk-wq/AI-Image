@@ -4,12 +4,13 @@
 STYLE ?= phonk
 TITLE ?= Untitled
 
-.PHONY: help install finetune new prepare train cover styles
+.PHONY: help install web finetune new prepare train cover styles
 
 help:
 	@echo "Cibles disponibles :"
 	@echo "  make install                      # installe les dépendances (sur Mac)"
-	@echo "  make finetune                     # assistant tout-en-un (recommandé)"
+	@echo "  make web                          # ⭐ lance l'interface web (http://127.0.0.1:8000)"
+	@echo "  make finetune                     # assistant CLI tout-en-un"
 	@echo "  make new STYLE=phonk              # crée un nouveau style"
 	@echo "  make prepare STYLE=phonk          # prépare images + légendes"
 	@echo "  make train STYLE=phonk            # entraîne le LoRA"
@@ -18,6 +19,9 @@ help:
 
 install:
 	pip install -r requirements.txt
+
+web:
+	python -m webapp.server
 
 finetune:
 	python scripts/finetune.py

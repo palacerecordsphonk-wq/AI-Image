@@ -25,5 +25,8 @@ output/
 .cache/
 .mflux/
 
+# Journaux de l'interface web
+.weblogs/
+
 # macOS
 .DS_Store
