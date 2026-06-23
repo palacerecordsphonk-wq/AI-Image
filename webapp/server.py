@@ -74,12 +74,15 @@ class JobManager:
         import subprocess
 
         with self._lock:
-            busy = self.active_heavy()
-            if busy is not None:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Une tâche est déjà en cours ({busy.kind}). Attends la fin.",
-                )
+            # Seules les tâches "lourdes" (GPU) sont mutuellement exclusives.
+            # Un téléchargement peut tourner en parallèle.
+            if kind in self.HEAVY:
+                busy = self.active_heavy()
+                if busy is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Une tâche est déjà en cours ({busy.kind}). Attends la fin.",
+                    )
             job_id = uuid.uuid4().hex[:12]
             log_path = LOGS_DIR / f"{job_id}.log"
             job = Job(id=job_id, kind=kind, style=style, cmd=cmd, log_path=log_path)
@@ -181,6 +184,14 @@ class TrainReq(BaseModel):
     quantize: int | None = 8
 
 
+class SpotifyReq(BaseModel):
+    url: str
+    dest: str
+    client_id: str
+    client_secret: str
+    with_artist: bool = False
+
+
 class GenerateReq(BaseModel):
     style: str
     title: str = ""
@@ -217,6 +228,7 @@ def api_styles() -> list[dict]:
             "dataset_count": len(dataset),
             "trained": ckpt is not None,
             "checkpoint": ckpt.name if ckpt else None,
+            "raw_path": str((sdir / "raw").resolve()),
         })
     return out
 
@@ -358,6 +370,24 @@ def api_generate(req: GenerateReq) -> dict:
             job.result = {"image": f"/outputs/{out_name}"}
 
     job = jobs.start("generate", cmd, style=req.style, on_done=_done)
+    return job_dict(job)
+
+
+@app.post("/api/spotify/download")
+def api_spotify(req: SpotifyReq) -> dict:
+    if not req.url.strip() or not req.dest.strip():
+        raise HTTPException(400, "Lien de playlist et dossier de destination requis.")
+    if not req.client_id.strip() or not req.client_secret.strip():
+        raise HTTPException(400, "Client ID et Client Secret Spotify requis.")
+    cmd = [
+        PYTHON, str(SCRIPTS / "spotify_covers.py"), req.url.strip(),
+        "--dest", req.dest.strip(),
+        "--client-id", req.client_id.strip(),
+        "--client-secret", req.client_secret.strip(),
+    ]
+    if req.with_artist:
+        cmd.append("--with-artist")
+    job = jobs.start("download", cmd)
     return job_dict(job)
 
 

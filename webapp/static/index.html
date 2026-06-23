@@ -12,6 +12,7 @@
     <nav class="tabs">
       <div class="tab active" data-view="finetune">🎚️ Fine-tune</div>
       <div class="tab" data-view="generate">🎨 Génération</div>
+      <div class="tab" data-view="spotify">⬇️ Spotify</div>
       <div class="tab" data-view="gallery">🖼️ Galerie</div>
     </nav>
     <div class="spacer"></div>
@@ -76,6 +77,48 @@
           <div class="preview" id="genPreview">
             <div class="placeholder">L'image générée apparaîtra ici.</div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= SPOTIFY ======================= -->
+    <section class="view" id="view-spotify">
+      <div class="grid-2">
+        <div class="card">
+          <div class="step-title"><h2>Télécharger les covers d'une playlist</h2></div>
+          <h3>Colle un lien de playlist Spotify : toutes les pochettes seront téléchargées, nommées d'après le titre du morceau.</h3>
+
+          <label>Lien de la playlist Spotify</label>
+          <input type="text" id="spUrl" placeholder="https://open.spotify.com/playlist/…" />
+
+          <label>Dossier de destination</label>
+          <input type="text" id="spDest" placeholder="/Users/toi/Desktop/covers_funk" />
+          <label>…ou télécharger directement dans un style</label>
+          <select id="spStyle"><option value="">— choisir un style (optionnel) —</option></select>
+          <div class="hint">Choisir un style remplit le chemin avec son dossier d'images (raw/).</div>
+
+          <div class="checkbox"><input type="checkbox" id="spArtist" />
+            <span>Nommer « Artiste - Titre » (sinon : Titre seul)</span></div>
+
+          <div class="btn-row"><button class="big" id="btnSpotify">⬇️ Télécharger les covers</button></div>
+          <div id="spStatus"></div>
+          <div class="log" id="spLog" style="display:none"></div>
+        </div>
+
+        <div class="card">
+          <div class="step-title"><h2>🔑 Identifiants Spotify (gratuits, une fois)</h2></div>
+          <h3>L'API Spotify exige une clé développeur (aucune connexion à ton compte).</h3>
+          <ol style="color:var(--muted);font-size:13px;line-height:1.7;padding-left:18px">
+            <li>Va sur <b>developer.spotify.com/dashboard</b></li>
+            <li>« Create app » (mets n'importe quel nom + une Redirect URI bidon)</li>
+            <li>Copie le <b>Client ID</b> et le <b>Client Secret</b> ci-dessous</li>
+          </ol>
+          <label>Client ID</label>
+          <input type="text" id="spId" placeholder="Client ID" />
+          <label>Client Secret</label>
+          <input type="text" id="spSecret" placeholder="Client Secret" />
+          <div class="hint">Mémorisés uniquement dans ce navigateur (localStorage), jamais envoyés ailleurs que sur Spotify.</div>
+          <div class="btn-row"><button class="ghost" id="spSaveKeys">Mémoriser les clés</button></div>
         </div>
       </div>
     </section>

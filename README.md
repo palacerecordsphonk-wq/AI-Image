@@ -49,12 +49,21 @@ make web
 ```
 Puis ouvre **http://127.0.0.1:8000** dans ton navigateur.
 
-Trois onglets :
+Quatre onglets :
 - **🎚️ Fine-tune** — crée un style, importe un dossier d'images (par chemin ou
   upload), prépare + auto-captioning IA, puis entraîne le LoRA. Journal en direct.
 - **🎨 Génération** — choisis le style, écris le titre + une description, règle les
   options, génère, et vois l'image apparaître.
+- **⬇️ Spotify** — colle un lien de playlist Spotify + un dossier de destination :
+  télécharge toutes les covers de la playlist, nommées d'après le titre du morceau.
+  Pratique pour constituer un dataset (tu peux viser directement le dossier d'un style).
 - **🖼️ Galerie** — toutes tes images générées.
+
+> 🔑 **Pour le téléchargement Spotify**, il faut une clé développeur Spotify
+> gratuite (Client ID + Secret) — aucune connexion à ton compte. Crée une app sur
+> [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), puis
+> colle les clés dans l'onglet Spotify (elles sont mémorisées dans le navigateur).
+> En CLI : `python scripts/spotify_covers.py "<lien>" --dest <dossier> --client-id ID --client-secret SECRET`
 
 Tout tourne en local. Le reste de ce README décrit les outils en ligne de commande
 équivalents (utiles pour scripter), mais l'interface web suffit pour tout faire.
@@ -130,6 +139,7 @@ AI-Image/
 │   ├── build_train_config.py # génère la config mflux d'un style
 │   ├── train_style.py        # lance l'entraînement LoRA (mflux-train)
 │   ├── generate_cover.py     # titre + style -> cover (mflux-generate)
+│   ├── spotify_covers.py     # télécharge en masse les covers d'une playlist Spotify
 │   └── lib.py                # helpers partagés
 ├── styles/                   # un sous-dossier par style (voir styles/README.md)
 │   └── _TEMPLATE/            # gabarit d'exemple

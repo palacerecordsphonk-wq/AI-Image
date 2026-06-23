@@ -30,6 +30,7 @@ $$(".tab").forEach((tab) => tab.addEventListener("click", () => {
   tab.classList.add("active");
   $("#view-" + tab.dataset.view).classList.add("active");
   if (tab.dataset.view === "generate") loadStyleOptions();
+  if (tab.dataset.view === "spotify") loadSpotifyStyles();
   if (tab.dataset.view === "gallery") loadGallery();
 }));
 
@@ -280,6 +281,55 @@ $("#btnGenerate").onclick = async () => {
       },
     });
   } catch (e) { toast(e.message, true); $("#btnGenerate").disabled = false; }
+};
+
+// ----- Spotify ---------------------------------------------------------------
+async function loadSpotifyStyles() {
+  const styles = await api("GET", "/api/styles");
+  const sel = $("#spStyle");
+  sel.innerHTML = `<option value="">— choisir un style (optionnel) —</option>` +
+    styles.map((s) => `<option value="${s.raw_path}">${s.name} (raw/)</option>`).join("");
+  // restaure les clés mémorisées
+  $("#spId").value = localStorage.getItem("sp_id") || "";
+  $("#spSecret").value = localStorage.getItem("sp_secret") || "";
+}
+
+$("#spStyle").addEventListener("change", (e) => {
+  if (e.target.value) $("#spDest").value = e.target.value;
+});
+
+$("#spSaveKeys").onclick = () => {
+  localStorage.setItem("sp_id", $("#spId").value.trim());
+  localStorage.setItem("sp_secret", $("#spSecret").value.trim());
+  toast("Clés mémorisées dans ce navigateur.");
+};
+
+$("#btnSpotify").onclick = async () => {
+  const body = {
+    url: $("#spUrl").value.trim(),
+    dest: $("#spDest").value.trim(),
+    client_id: $("#spId").value.trim(),
+    client_secret: $("#spSecret").value.trim(),
+    with_artist: $("#spArtist").checked,
+  };
+  if (!body.url) return toast("Colle un lien de playlist.", true);
+  if (!body.dest) return toast("Indique un dossier de destination.", true);
+  if (!body.client_id || !body.client_secret) return toast("Renseigne tes clés Spotify (à droite).", true);
+  // mémorise les clés au passage
+  localStorage.setItem("sp_id", body.client_id);
+  localStorage.setItem("sp_secret", body.client_secret);
+  try {
+    const job = await api("POST", "/api/spotify/download", body);
+    $("#btnSpotify").disabled = true;
+    pollJob(job.id, {
+      logEl: $("#spLog"), statusEl: $("#spStatus"),
+      onDone: (j) => {
+        $("#btnSpotify").disabled = false;
+        toast(j.status === "done" ? "Téléchargement terminé ✓" : "Téléchargement : " + j.status, j.status !== "done");
+        loadStyles();
+      },
+    });
+  } catch (e) { toast(e.message, true); $("#btnSpotify").disabled = false; }
 };
 
 // ----- Gallery ---------------------------------------------------------------
