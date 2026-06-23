@@ -37,7 +37,32 @@ Au premier lancement, mflux télécharge FLUX.1 [dev] depuis Hugging Face
 
 ---
 
-## 🚀 Démarrage rapide
+## 🚀 Le plus simple : l'assistant
+
+Une seule commande, qui te demande le nom du style et le dossier d'images, puis
+fait TOUT (import → captioning IA → entraînement) :
+
+```bash
+python scripts/finetune.py
+```
+
+Il te pose 2-3 questions :
+- **Quel style ?** (ex. `rock`, `funk`, `ambiance`)
+- **Chemin du dossier d'images ?** (sur Mac : glisse-dépose le dossier dans le Terminal)
+- **Titre écrit sur les covers ?** → réponds `mixed` : l'IA détecte elle-même, image
+  par image, s'il y a un titre, et apprend la typographie quand il y en a un.
+
+Refais-le pour chaque style (`rock`, puis `funk`, puis `ambiance`…). Ensuite :
+```bash
+python scripts/generate_cover.py rock --title "Thunder Road"
+```
+
+> Tu peux aussi tout passer en options :
+> `python scripts/finetune.py --style rock --images "/Users/moi/Desktop/rock" --max-resolution 768`
+
+---
+
+## 🚀 Étape par étape (si tu préfères contrôler)
 
 ```bash
 # 1) Créer un style (class-word = ancrage ; title-text = convention de titre)
@@ -74,6 +99,7 @@ La cover sort dans `output/phonk_midnight_drive.png`.
 ```
 AI-Image/
 ├── scripts/
+│   ├── finetune.py           # ⭐ assistant tout-en-un (nom + dossier -> LoRA)
 │   ├── new_style.py          # crée un style (dossier + style.yaml)
 │   ├── prepare_dataset.py    # raw/ -> dataset/ (resize + légendes auto)
 │   ├── caption.py            # (re)génère les légendes .txt

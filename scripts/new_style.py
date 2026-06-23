@@ -13,9 +13,7 @@ from __future__ import annotations
 
 import argparse
 
-import yaml
-
-from lib import IMAGE_EXTS, STYLES_DIR, die, slugify, style_dir
+from lib import IMAGE_EXTS, STYLES_DIR, create_style, slugify
 
 
 def main() -> None:
@@ -53,30 +51,16 @@ def main() -> None:
     args = parser.parse_args()
 
     style = slugify(args.style)
-    if not style:
-        die("Nom de style invalide.")
-
-    sdir = style_dir(style)
-    if sdir.exists():
-        die(f"Le style '{style}' existe déjà ({sdir}).")
-
+    sdir = create_style(
+        style,
+        trigger=args.trigger,
+        description=args.description,
+        base_prompt=args.base_prompt,
+        base_model=args.base_model,
+        class_word=args.class_word,
+        title_text=args.title_text,
+    )
     trigger = args.trigger or f"{style}_style"
-
-    # Arborescence : raw/ (images d'origine) et dataset/ (images préparées + captions)
-    (sdir / "raw").mkdir(parents=True)
-    (sdir / "dataset").mkdir()
-
-    style_yaml = {
-        "name": style,
-        "trigger": trigger,
-        "description": args.description,
-        "base_prompt": args.base_prompt,
-        "base_model": args.base_model,
-        "class_word": args.class_word,
-        "title_text": args.title_text,
-    }
-    with open(sdir / "style.yaml", "w", encoding="utf-8") as f:
-        yaml.safe_dump(style_yaml, f, allow_unicode=True, sort_keys=False)
 
     exts = ", ".join(sorted(IMAGE_EXTS))
     print(f"✅ Style '{style}' créé dans {sdir.relative_to(STYLES_DIR.parent)}")

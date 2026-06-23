@@ -4,11 +4,12 @@
 STYLE ?= phonk
 TITLE ?= Untitled
 
-.PHONY: help install new prepare train cover styles
+.PHONY: help install finetune new prepare train cover styles
 
 help:
 	@echo "Cibles disponibles :"
 	@echo "  make install                      # installe les dépendances (sur Mac)"
+	@echo "  make finetune                     # assistant tout-en-un (recommandé)"
 	@echo "  make new STYLE=phonk              # crée un nouveau style"
 	@echo "  make prepare STYLE=phonk          # prépare images + légendes"
 	@echo "  make train STYLE=phonk            # entraîne le LoRA"
@@ -17,6 +18,9 @@ help:
 
 install:
 	pip install -r requirements.txt
+
+finetune:
+	python scripts/finetune.py
 
 new:
 	python scripts/new_style.py $(STYLE)

@@ -6,6 +6,7 @@ Tout est en stdlib + PyYAML pour rester léger et portable.
 from __future__ import annotations
 
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -76,6 +77,71 @@ def load_style(style: str) -> dict:
         title_text = "mixed"
     data["title_text"] = title_text
     return data
+
+
+def create_style(
+    style: str,
+    *,
+    trigger: str | None = None,
+    description: str = "",
+    base_prompt: str = "album cover art, high quality",
+    base_model: str = "dev",
+    class_word: str = "album cover",
+    title_text: str = "mixed",
+) -> Path:
+    """Crée l'arborescence d'un style + son style.yaml. Retourne le dossier.
+
+    Lève SystemExit si le style existe déjà ou si le nom est invalide.
+    """
+    style = slugify(style)
+    if not style:
+        die("Nom de style invalide.")
+    sdir = style_dir(style)
+    if sdir.exists():
+        die(f"Le style '{style}' existe déjà ({sdir}).")
+
+    (sdir / "raw").mkdir(parents=True)
+    (sdir / "dataset").mkdir()
+
+    data = {
+        "name": style,
+        "trigger": trigger or f"{style}_style",
+        "description": description,
+        "base_prompt": base_prompt,
+        "class_word": class_word,
+        "title_text": title_text,
+        "base_model": base_model,
+    }
+    with open(sdir / "style.yaml", "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+    return sdir
+
+
+def import_images(source: Path, dest_raw: Path) -> int:
+    """Copie les images d'un dossier source vers le dossier raw/ d'un style.
+
+    Recherche récursive (gère les sous-dossiers). Retourne le nombre copié.
+    """
+    if not source.exists() or not source.is_dir():
+        die(f"Dossier source introuvable : {source}")
+    found = sorted(
+        p for p in source.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+    )
+    if not found:
+        exts = ", ".join(sorted(IMAGE_EXTS))
+        die(f"Aucune image ({exts}) trouvée dans {source}.")
+    dest_raw.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for src in found:
+        target = dest_raw / src.name
+        # Évite d'écraser un fichier homonyme venant d'un autre sous-dossier.
+        n = 1
+        while target.exists():
+            target = dest_raw / f"{src.stem}_{n}{src.suffix}"
+            n += 1
+        shutil.copy2(src, target)
+        copied += 1
+    return copied
 
 
 def find_images(folder: Path) -> list[Path]:
