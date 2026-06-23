@@ -113,8 +113,24 @@ def get_token(client_id: str, client_secret: str) -> str:
 
 def _api_get(url: str, token: str) -> dict:
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404 and "/playlists/" in url:
+            raise RuntimeError(
+                "Playlist introuvable ou inaccessible (404).\n"
+                "   ➜ Spotify BLOQUE l'accès API à ses playlists éditoriales/algorithmiques "
+                "(ID commençant par « 37i9 » : Top 50, radios de genre, « Made for you »…).\n"
+                "   ➜ Solution : utilise une playlist que TU as créée, ou duplique celle-ci "
+                "dans ton compte (Spotify : … → Ajouter à une autre playlist → Nouvelle playlist), "
+                "puis colle le lien de TA playlist."
+            ) from e
+        if e.code in (401, 403):
+            raise RuntimeError(
+                f"Accès refusé par Spotify ({e.code}). Vérifie ton Client ID / Client Secret."
+            ) from e
+        raise RuntimeError(f"Erreur Spotify {e.code} sur la playlist.") from e
 
 
 def iter_playlist_tracks(playlist_id: str, token: str):
