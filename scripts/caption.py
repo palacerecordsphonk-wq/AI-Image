@@ -62,14 +62,16 @@ TITLE_NOTE = {
 # On DONNE le titre connu (= nom du fichier) au VLM, au lieu de lui faire deviner
 # les lettres. Il juge la PRÉSENCE et décrit le STYLE d'écriture du titre.
 VLM_PROMPT_TMPL = (
-    'This album cover is for a track titled "{title}". '
-    "Reply with ONLY a compact JSON object, no extra text, with keys: "
-    '"caption" (short phrase: colors, mood, subject, composition; max 20 words; '
-    "do NOT transcribe any text), "
-    '"has_title" (true/false: is that title text visibly written anywhere on the '
-    "cover, even partially, stylized, hidden or repeated?), "
-    '"title_style" (if has_title: a few words on HOW it is rendered — font style, '
-    "placement, size, color, partial, repeated, hidden, glitched; else empty)."
+    'You are labeling an album cover to train an image model. '
+    'The track is titled "{title}". '
+    "Reply with ONLY one compact JSON object, no extra text, with keys:\n"
+    '"caption": ONE concise phrase (max 18 words) describing the visual style — '
+    "colors, mood, subject, texture, composition. No repeated words. Do NOT transcribe text.\n"
+    '"has_title": true ONLY if the title (or a clear part of it) is visibly written on '
+    "the cover as graphic text — even if stylized, distorted, partial, integrated into "
+    "the artwork or repeated. false only if there is no readable title text at all.\n"
+    '"title_style": if has_title, 4-10 words on HOW the title looks (font, weight, color, '
+    "placement, effects: bubble/graffiti/brushed-ink/chrome/glitch/stacked/repeated); else \"\"."
 )
 
 
