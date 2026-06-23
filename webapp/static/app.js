@@ -132,26 +132,36 @@ async function renderDetail() {
       <div class="step-title"><span class="step-num">2</span><h2>Préparer & légender</h2></div>
       <div class="row-inputs">
         <div><label>Résolution des images</label>
-          <select id="prepSize"><option value="1024">1024 (qualité)</option><option value="768">768 (rapide)</option></select>
+          <select id="prepSize">
+            <option value="768">768 (rapide)</option>
+            <option value="1024" selected>1024 (qualité)</option>
+            <option value="1536">1536 (haute)</option>
+            <option value="2048">2048 (très haute)</option>
+            <option value="3000">3000 (ultra)</option>
+          </select>
         </div>
         <div><label>&nbsp;</label>
           <div class="checkbox"><input type="checkbox" id="prepAuto" checked />
           <span>Auto-captioning IA (détecte tout + le titre)</span></div>
         </div>
       </div>
-      <div class="hint">L'IA décrit chaque image (couleurs, ambiance, personnages, typo) et détecte le titre. Télécharge un modèle (~5 Go) au 1er usage.</div>
+      <div class="hint">Résolution = définition à laquelle les covers sont stockées (Ultra = garde la pleine qualité HD). L'auto-captioning IA décrit chaque image (couleurs, ambiance, perso, typo) et détecte le titre — télécharge un modèle (~5 Go) au 1er usage.</div>
       <div class="btn-row"><button id="btnPrepare">Préparer le dataset</button></div>
     </div>
 
     <div class="card">
       <div class="step-title"><span class="step-num">3</span><h2>Entraîner le style (LoRA)</h2></div>
       <div class="row-inputs three">
-        <div><label>Résolution</label>
-          <select id="trMaxRes"><option value="1024">1024</option><option value="768">768 (rapide)</option></select></div>
+        <div><label>Résolution d'entraînement</label>
+          <select id="trMaxRes">
+            <option value="768">768 (rapide)</option>
+            <option value="1024" selected>1024 (recommandé)</option>
+            <option value="1536">1536 (lent)</option>
+          </select></div>
         <div><label>Itérations (~)</label><input type="number" id="trSteps" value="1200" /></div>
         <div><label>Rang LoRA</label><input type="number" id="trRank" value="16" /></div>
       </div>
-      <div class="hint">Long : plusieurs heures. Pour un 1er test, choisis 768.</div>
+      <div class="hint">⚠️ Ici c'est la résolution d'<b>entraînement</b> (≠ stockage). FLUX est optimisé pour ~1024 : au-delà c'est beaucoup plus lent sans vrai gain. Pour des covers ultra-nettes, génère puis upscale.</div>
       <div class="btn-row"><button id="btnTrain">🚀 Lancer l'entraînement</button></div>
     </div>
 

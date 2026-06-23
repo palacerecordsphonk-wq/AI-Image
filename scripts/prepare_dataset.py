@@ -46,7 +46,8 @@ def main() -> None:
         "--size",
         type=int,
         default=1024,
-        help="Taille max du plus grand côté en pixels (défaut 1024 ; 768 = + rapide).",
+        help="Taille max du plus grand côté, px (768 rapide, 1024 défaut, "
+             "jusqu'à 3000 ultra). Ne fait que réduire : pas d'upscale artificiel.",
     )
     parser.add_argument(
         "--no-caption",
