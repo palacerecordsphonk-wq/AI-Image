@@ -320,6 +320,7 @@ $("#btnSpotify").onclick = async () => {
     client_id: $("#spId").value.trim(),
     client_secret: $("#spSecret").value.trim(),
     with_artist: $("#spArtist").checked,
+    hq: $("#spHq").checked,
   };
   if (spMode === "new") {
     body.new_style = $("#spNewName").value.trim();

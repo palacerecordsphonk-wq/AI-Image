@@ -28,6 +28,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,6 +36,7 @@ from pathlib import Path
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API = "https://api.spotify.com/v1"
+ITUNES_SEARCH = "https://itunes.apple.com/search"
 IMAGE_EXTS_OK = {".jpg", ".jpeg", ".png", ".webp"}
 
 
@@ -71,6 +73,15 @@ def pick_largest_image(images: list[dict]) -> str | None:
         return None
     best = max(images, key=lambda im: (im.get("width") or 0) * (im.get("height") or 0))
     return best.get("url")
+
+
+def itunes_upscale_url(url: str, res: int) -> str:
+    """Transforme une URL d'artwork iTunes (…/100x100bb.jpg) en haute résolution.
+
+    Apple sert l'image à la taille demandée (jusqu'à la résolution source, souvent
+    jusqu'à ~3000px). Ex : …/100x100bb.jpg -> …/3000x3000bb.jpg
+    """
+    return re.sub(r"/\d+x\d+bb\.(jpg|jpeg|png)", f"/{res}x{res}bb.\\1", url)
 
 
 def unique_path(dest: Path, stem: str, ext: str) -> Path:
@@ -111,8 +122,8 @@ def _api_get(url: str, token: str) -> dict:
 
 
 def iter_playlist_tracks(playlist_id: str, token: str):
-    """Génère (titre, artistes, url_cover) pour chaque morceau de la playlist."""
-    fields = "next,total,items(track(name,artists(name),album(images)))"
+    """Génère (titre, artistes, album, url_cover_spotify) pour chaque morceau."""
+    fields = "next,total,items(track(name,artists(name),album(name,images)))"
     offset = 0
     limit = 100
     while True:
@@ -131,10 +142,43 @@ def iter_playlist_tracks(playlist_id: str, token: str):
             artists = ", ".join(a.get("name", "") for a in track.get("artists", []) if a.get("name"))
             album = track.get("album") or {}
             cover = pick_largest_image(album.get("images", []))
-            yield name, artists, cover
+            yield name, artists, album.get("name", ""), cover
         offset += limit
         if not data.get("next"):
             break
+
+
+def itunes_hires_url(artist: str, album: str, res: int) -> str | None:
+    """Cherche la cover de l'album sur iTunes et renvoie une URL haute résolution.
+
+    Gratuit, sans authentification. Renvoie None si rien trouvé.
+    """
+    term = " ".join(p for p in [artist.split(",")[0].strip(), album] if p).strip()
+    if not term:
+        return None
+    url = ITUNES_SEARCH + "?" + urllib.parse.urlencode(
+        {"term": term, "entity": "album", "limit": 5}
+    )
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "AI-Image/1.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            results = json.loads(r.read()).get("results", [])
+    except Exception:
+        return None
+    if not results:
+        return None
+
+    # Choisit le meilleur résultat : album dont le nom correspond le mieux.
+    alb_low = album.strip().lower()
+    best = None
+    for res_item in results:
+        coll = (res_item.get("collectionName") or "").lower()
+        if alb_low and (alb_low in coll or coll in alb_low):
+            best = res_item
+            break
+    best = best or results[0]
+    art = best.get("artworkUrl100") or best.get("artworkUrl60")
+    return itunes_upscale_url(art, res) if art else None
 
 
 def download_image(url: str, target: Path) -> None:
@@ -147,29 +191,48 @@ def download_image(url: str, target: Path) -> None:
 # Orchestration
 # --------------------------------------------------------------------------- #
 def run(url: str, dest: Path, client_id: str, client_secret: str, *,
-        with_artist: bool = False) -> int:
+        with_artist: bool = False, hq: bool = True, res: int = 3000,
+        itunes_delay: float = 0.3) -> int:
     playlist_id = parse_playlist_id(url)
     dest.mkdir(parents=True, exist_ok=True)
     print(f"🎧 Playlist : {playlist_id}")
     print(f"📁 Destination : {dest}")
+    print(f"🖼️  Qualité : {'Apple Music HD (~' + str(res) + 'px)' if hq else 'Spotify (640px)'}")
 
     token = get_token(client_id, client_secret)
     print("✅ Authentifié auprès de Spotify.\n")
 
     downloaded = 0
     skipped = 0
-    seen_urls: dict[str, Path] = {}
+    hires_hits = 0
+    itunes_cache: dict[tuple, str | None] = {}  # (artist, album) -> url HD (ou None)
     tracks = list(iter_playlist_tracks(playlist_id, token))
     total = len(tracks)
     print(f"🔎 {total} titre(s) trouvé(s).\n")
 
-    for i, (name, artists, cover) in enumerate(tracks, 1):
+    for i, (name, artists, album, spotify_cover) in enumerate(tracks, 1):
         label = f"{artists} - {name}" if (with_artist and artists) else name
+
+        # 1) Tente la haute résolution via iTunes (avec cache par album).
+        cover = None
+        is_hd = False
+        if hq:
+            key = (artists.split(",")[0].strip().lower(), album.strip().lower())
+            if key not in itunes_cache:
+                itunes_cache[key] = itunes_hires_url(artists, album, res)
+                time.sleep(itunes_delay)  # respecte la limite de l'API iTunes
+            cover = itunes_cache[key]
+            is_hd = cover is not None
+
+        # 2) Repli sur la cover Spotify (640px) si pas de HD.
+        if not cover:
+            cover = spotify_cover
+
         if not cover:
             print(f"[{i}/{total}] ⏭️  {label} (pas de cover)")
             skipped += 1
             continue
-        # extension d'après l'URL (Spotify -> .jpg en général)
+
         ext = os.path.splitext(urllib.parse.urlparse(cover).path)[1].lower()
         if ext not in IMAGE_EXTS_OK:
             ext = ".jpg"
@@ -178,12 +241,16 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
         try:
             download_image(cover, target)
             downloaded += 1
-            print(f"[{i}/{total}] ⬇️  {target.name}")
+            if is_hd:
+                hires_hits += 1
+            tag = "🟢 HD" if is_hd else "⚪ 640"
+            print(f"[{i}/{total}] ⬇️  {tag}  {target.name}")
         except Exception as exc:
             skipped += 1
             print(f"[{i}/{total}] ⚠️  Échec {label} : {exc}")
 
-    print(f"\n🎉 Terminé : {downloaded} cover(s) téléchargée(s), {skipped} ignorée(s).")
+    print(f"\n🎉 Terminé : {downloaded} cover(s) téléchargée(s) "
+          f"({hires_hits} en HD, {downloaded - hires_hits} en 640px), {skipped} ignorée(s).")
     print(f"   Dans : {dest}")
     return 0
 
@@ -197,6 +264,9 @@ def _self_test() -> None:
     assert pick_largest_image([{"url": "a", "width": 64, "height": 64},
                                {"url": "b", "width": 640, "height": 640}]) == "b"
     assert pick_largest_image([]) is None
+    u = "https://is1-ssl.mzstatic.com/image/thumb/abc/source/100x100bb.jpg"
+    assert itunes_upscale_url(u, 3000).endswith("/3000x3000bb.jpg")
+    assert itunes_upscale_url(u, 1600).endswith("/1600x1600bb.jpg")
     print("✅ self-test OK")
 
 
@@ -208,6 +278,12 @@ def main() -> None:
     parser.add_argument("--client-secret", default=os.environ.get("SPOTIFY_CLIENT_SECRET"))
     parser.add_argument("--with-artist", action="store_true",
                         help="Nommer 'Artiste - Titre' au lieu de 'Titre'.")
+    parser.add_argument("--no-hq", action="store_true",
+                        help="Désactiver la haute résolution (garder le 640px de Spotify).")
+    parser.add_argument("--res", type=int, default=3000,
+                        help="Résolution cible en HD via Apple Music (défaut 3000).")
+    parser.add_argument("--itunes-delay", type=float, default=0.3,
+                        help="Pause entre recherches iTunes, en s (défaut 0.3).")
     parser.add_argument("--self-test", action="store_true", help="Tester les fonctions internes.")
     args = parser.parse_args()
 
@@ -225,7 +301,8 @@ def main() -> None:
 
     try:
         rc = run(args.url, Path(args.dest).expanduser(), args.client_id, args.client_secret,
-                 with_artist=args.with_artist)
+                 with_artist=args.with_artist, hq=not args.no_hq, res=args.res,
+                 itunes_delay=args.itunes_delay)
     except Exception as exc:
         print(f"❌ {exc}", file=sys.stderr)
         sys.exit(1)
