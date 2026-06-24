@@ -228,6 +228,161 @@ def find_images(folder: Path) -> list[Path]:
     )
 
 
+# --------------------------------------------------------------------------- #
+# Détection & dosage du grain (film grain)
+# --------------------------------------------------------------------------- #
+# Le grain est traité comme une VARIABLE du style, comme le titre : on le détecte
+# sur chaque image au moment de la préparation, on l'inscrit dans la légende, et le
+# LoRA apprend ainsi à le reproduire — ou à rester clean — selon ce qu'on demande à
+# la génération. Détection 100 % Pillow (pas de numpy requis), robuste aux contours.
+
+GRAIN_LEVELS = ("none", "light", "medium", "heavy")
+
+# Seuils sur le score de grain (médiane du résidu haute-fréquence, échelle ~0-30).
+# Bornes entre none|light, light|medium, medium|heavy. Réglables/calibrables.
+GRAIN_THRESHOLDS = (1.3, 3.2, 6.5)
+
+# Mention ajoutée à la LÉGENDE d'entraînement selon le grain détecté (le LoRA
+# apprend ainsi le grain — ou le clean — comme un attribut nommé, donc pilotable).
+GRAIN_CAPTION = {
+    "none": "clean, no grain",
+    "light": "subtle film grain",
+    "medium": "film grain",
+    "heavy": "heavy film grain",
+}
+
+# Instruction ajoutée au PROMPT de génération pour DOSER le grain demandé.
+# "auto" -> rien (le modèle fait comme il a appris, mélange). "none" -> clean forcé.
+GRAIN_PROMPT = {
+    "auto": "",
+    "none": "perfectly clean, no grain, smooth, no noise",
+    "light": "subtle film grain",
+    "medium": "film grain, grainy analog texture",
+    "heavy": "heavy film grain, strong grainy texture",
+}
+
+
+def estimate_grain_score(image_path: Path) -> float:
+    """Estime la quantité de grain d'une image (médiane du bruit haute-fréquence).
+
+    Méthode : on isole le haut du spectre (image − flou gaussien), puis on prend la
+    MÉDIANE de l'amplitude moyenne sur une grille de patches. La médiane ignore les
+    contours (locaux, peu nombreux) et reflète le grain (uniforme sur toute l'image).
+    Retourne un score (~0 = clean, plus c'est haut, plus il y a de grain).
+    """
+    from PIL import Image, ImageChops, ImageFilter, ImageStat
+
+    try:
+        with Image.open(image_path) as im:
+            im = im.convert("L")
+            w, h = im.size
+            longest = max(w, h)
+            if longest > 512:  # normalise l'échelle d'analyse (vitesse + cohérence)
+                s = 512 / longest
+                im = im.resize((max(1, round(w * s)), max(1, round(h * s))), Image.LANCZOS)
+            blur = im.filter(ImageFilter.GaussianBlur(radius=1.0))
+            residual = ImageChops.difference(im, blur)
+    except Exception:
+        return 0.0
+
+    rw, rh = residual.size
+    grid = 12
+    pw, ph = max(1, rw // grid), max(1, rh // grid)
+    means: list[float] = []
+    for gy in range(grid):
+        for gx in range(grid):
+            box = (gx * pw, gy * ph, min(rw, (gx + 1) * pw), min(rh, (gy + 1) * ph))
+            if box[2] <= box[0] or box[3] <= box[1]:
+                continue
+            means.append(ImageStat.Stat(residual.crop(box)).mean[0])
+    if not means:
+        return 0.0
+    means.sort()
+    return means[len(means) // 2]  # médiane (robuste aux contours)
+
+
+def grain_level(score: float) -> str:
+    """Classe un score de grain en none | light | medium | heavy."""
+    t0, t1, t2 = GRAIN_THRESHOLDS
+    if score < t0:
+        return "none"
+    if score < t1:
+        return "light"
+    if score < t2:
+        return "medium"
+    return "heavy"
+
+
+def detect_grain(image_path: Path) -> str:
+    """Détecte le niveau de grain d'une image (none|light|medium|heavy)."""
+    return grain_level(estimate_grain_score(image_path))
+
+
+# --------------------------------------------------------------------------- #
+# Vocabulaire de style (pour la génération "aléatoire" sans prompt)
+# --------------------------------------------------------------------------- #
+# Mots/expressions trop génériques à exclure du vocabulaire piochable.
+_VOCAB_STOPWORDS = {
+    "masterpiece", "highly detailed", "high quality", "album cover", "cover art",
+}
+
+
+def style_vocabulary(style: str) -> list[str]:
+    """Extrait les fragments descriptifs appris d'un style depuis ses légendes.
+
+    On lit tous les .txt du dataset, on retire le trigger, le class_word, la mention
+    de titre et la mention de grain (pilotés séparément), et on garde les fragments
+    de description uniques. C'est la "matière" dans laquelle pioche le mode aléatoire.
+    """
+    cfg = load_style(style)
+    dataset = style_dir(style) / "dataset"
+    if not dataset.exists():
+        return []
+    trigger = cfg["trigger"].strip().lower()
+    class_word = cfg["class_word"].strip().lower()
+    grain_notes = {v.lower() for v in GRAIN_CAPTION.values()}
+
+    seen: set[str] = set()
+    frags: list[str] = []
+    for txt in sorted(dataset.glob("*.txt")):
+        if txt.name.startswith("preview"):
+            continue
+        try:
+            line = txt.read_text(encoding="utf-8", errors="replace").strip()
+        except Exception:
+            continue
+        for part in line.split(","):
+            p = part.strip().strip(".")
+            pl = p.lower()
+            if not p or pl in seen:
+                continue
+            if pl == trigger or pl == class_word or pl in _VOCAB_STOPWORDS:
+                continue
+            if pl.startswith("with the title") or ("title" in pl and "text" in pl):
+                continue
+            if pl in grain_notes or "grain" in pl or pl in {"clean", "no noise", "smooth", "no grain"}:
+                continue
+            seen.add(pl)
+            frags.append(p)
+    return frags
+
+
+def random_extra(style: str, *, rng=None, k_min: int = 2, k_max: int = 4) -> str:
+    """Compose un prompt descriptif aléatoire en piochant dans le vocabulaire du style.
+
+    Renvoie "" si le style n'a pas (encore) de légendes descriptives exploitables —
+    la génération s'appuiera alors sur le trigger + le titre + une seed aléatoire.
+    """
+    import random as _random
+
+    rng = rng or _random
+    vocab = style_vocabulary(style)
+    if not vocab:
+        return ""
+    k = min(len(vocab), rng.randint(k_min, k_max))
+    return ", ".join(rng.sample(vocab, k))
+
+
 def latest_checkpoint(style: str) -> Path | None:
     """Retourne le checkpoint .zip le plus récent (le plus entraîné) d'un style.
 

@@ -23,7 +23,8 @@ import sys
 import zipfile
 from pathlib import Path
 
-from lib import OUTPUT_DIR, die, latest_checkpoint, load_style, slugify, style_dir
+from lib import (GRAIN_PROMPT, OUTPUT_DIR, die, latest_checkpoint, load_style,
+                 random_extra, slugify, style_dir)
 
 
 def ensure_mflux() -> str:
@@ -66,7 +67,9 @@ def resolve_title_mode(cfg: dict, force_text: bool, force_no_text: bool) -> bool
     return cfg.get("title_text", "mixed") != "no"
 
 
-def build_prompt(cfg: dict, title: str, extra: str, title_as_text: bool) -> str:
+def build_prompt(
+    cfg: dict, title: str, extra: str, title_as_text: bool, grain: str = "auto"
+) -> str:
     # Le trigger en tête déclenche tout l'univers appris (couleurs, ambiance, typo).
     parts = [cfg["trigger"], cfg["class_word"]]
     if title:
@@ -76,6 +79,10 @@ def build_prompt(cfg: dict, title: str, extra: str, title_as_text: bool) -> str:
             parts.append(f'inspired by "{title}"')
     if extra:
         parts.append(extra)
+    # Dosage du grain : "auto" laisse le modèle faire comme appris ; sinon on guide.
+    grain_note = GRAIN_PROMPT.get(grain, "")
+    if grain_note:
+        parts.append(grain_note)
     return ", ".join(p for p in parts if p)
 
 
@@ -94,6 +101,18 @@ def main() -> None:
         dest="force_title_text",
         action="store_true",
         help="Forcer : écrire le titre dans l'image (outrepasse title_text=no du style).",
+    )
+    parser.add_argument(
+        "--grain",
+        choices=["auto", "none", "light", "medium", "heavy"],
+        default="auto",
+        help="Dosage du grain : auto (comme appris), none (clean forcé), light/medium/heavy.",
+    )
+    parser.add_argument(
+        "--random",
+        dest="random_mode",
+        action="store_true",
+        help="Sans inspiration : compose un prompt aléatoire depuis le vocabulaire appris du style.",
     )
     parser.add_argument("--steps", type=int, default=25, help="Pas d'inférence (défaut 25).")
     parser.add_argument("--guidance", type=float, default=3.5, help="Guidance scale (défaut 3.5).")
@@ -130,7 +149,17 @@ def main() -> None:
 
     # 2. Construire le prompt (le mode titre suit la convention du style sauf override)
     title_as_text = resolve_title_mode(cfg, args.force_title_text, args.no_title_text)
-    prompt = build_prompt(cfg, args.title, args.extra, title_as_text)
+    extra = args.extra
+    # Mode aléatoire : pas d'inspiration -> on pioche dans le vocabulaire appris du
+    # style. On respecte un --extra explicite s'il est fourni (l'aléatoire le complète).
+    if args.random_mode and not extra.strip():
+        extra = random_extra(args.style)
+        if extra:
+            print(f"🎲 Prompt aléatoire : {extra}")
+        else:
+            print("🎲 Aléatoire : pas de vocabulaire descriptif appris, "
+                  "génération sur le trigger + titre + seed aléatoire.")
+    prompt = build_prompt(cfg, args.title, extra, title_as_text, args.grain)
 
     # 3. Chemin de sortie
     if args.output:

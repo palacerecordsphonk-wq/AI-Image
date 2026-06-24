@@ -210,6 +210,8 @@ class GenerateReq(BaseModel):
     title: str = ""
     extra: str = ""
     title_mode: str = "auto"  # auto | text | notext
+    grain: str = "auto"       # auto | none | light | medium | heavy
+    random: bool = False      # composer un prompt aléatoire depuis le style appris
     steps: int = 25
     guidance: float = 3.5
     width: int = 1024
@@ -392,6 +394,10 @@ def api_generate(req: GenerateReq) -> dict:
         cmd.append("--title-text")
     elif req.title_mode == "notext":
         cmd.append("--no-title-text")
+    grain = req.grain if req.grain in {"auto", "none", "light", "medium", "heavy"} else "auto"
+    cmd += ["--grain", grain]
+    if req.random:
+        cmd.append("--random")
 
     def _done(job: Job) -> None:
         if out_path.exists():
