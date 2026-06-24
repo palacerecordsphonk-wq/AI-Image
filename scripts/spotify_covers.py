@@ -5,6 +5,12 @@ Donne un lien de playlist + un dossier de destination : récupère TOUS les titr
 de la playlist et télécharge la cover de chacun, nommée d'après le titre du
 morceau.
 
+VERSIONS « slowed / sped up / reverb » : pour ces morceaux, on retire la mention
+de version du titre ET du nom d'album, puis on cherche la cover (Apple Music /
+Deezer) de la version NORMALE d'origine — pas celle de la version ralentie ou
+accélérée. Deux morceaux ne différant que par leur version donnent donc la même
+cover (et sont dédoublonnés).
+
 Authentification : nécessite des identifiants développeur Spotify (gratuits) via
 le flux "Client Credentials" — aucune connexion à ton compte requise.
   1. Va sur https://developer.spotify.com/dashboard
@@ -33,6 +39,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+from lib import strip_version_tags
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API = "https://api.spotify.com/v1"
@@ -256,7 +264,12 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
     print(f"🔎 {total} titre(s) trouvé(s).\n")
 
     for i, (name, artists, album, spotify_cover) in enumerate(tracks, 1):
-        label = f"{artists} - {name}" if (with_artist and artists) else name
+        # Version NORMALE : on retire 'slowed / sped up / reverb…' du titre ET de
+        # l'album, pour NOMMER le fichier et CHERCHER la cover de la version d'origine
+        # (et non celle de la version ralentie/accélérée).
+        track = strip_version_tags(name)
+        album_norm = strip_version_tags(album)
+        label = f"{artists} - {track}" if (with_artist and artists) else track
         stem = sanitize_filename(label)
 
         # Dédoublonnage : même morceau déjà présent (téléchargement précédent OU
@@ -270,9 +283,11 @@ def run(url: str, dest: Path, client_id: str, client_secret: str, *,
         cover = None
         tag = "⚪ 640"
         if hq:
-            cover, tag = _find_hires(artists, album, name, res, album_cache, itunes_delay)
+            cover, tag = _find_hires(artists, album_norm, track, res, album_cache, itunes_delay)
 
-        # Repli sur la cover Spotify (640px) si aucune source HD.
+        # Repli sur la cover Spotify (640px) si aucune source HD. C'est la cover de
+        # la version Spotify (parfois la version ralentie) ; elle ne sert que de
+        # dernier recours quand aucune source HD de la version normale n'est trouvée.
         if not cover:
             cover = spotify_cover
             tag = "⚪ 640"
@@ -342,6 +357,20 @@ def _self_test() -> None:
     u = "https://is1-ssl.mzstatic.com/image/thumb/abc/source/100x100bb.jpg"
     assert itunes_upscale_url(u, 3000).endswith("/3000x3000bb.jpg")
     assert itunes_upscale_url(u, 1600).endswith("/1600x1600bb.jpg")
+
+    # Nettoyage des "versions" (slowed / sped up / reverb…) -> titre normal.
+    assert strip_version_tags("BAILA LENTO - Slowed") == "BAILA LENTO"
+    assert strip_version_tags("BAILA LENTO (Slowed)") == "BAILA LENTO"
+    assert strip_version_tags("BAILA LENTO - Slowed + Reverb") == "BAILA LENTO"
+    assert strip_version_tags("Title (Slowed & Reverb)") == "Title"
+    assert strip_version_tags("Title - Slowed and Reverbed") == "Title"
+    assert strip_version_tags("Title (Sped Up)") == "Title"
+    assert strip_version_tags("Title - Speed Up") == "Title"
+    assert strip_version_tags("Title - Super Slowed") == "Title"
+    assert strip_version_tags("Title [Ultra Slowed]") == "Title"
+    assert strip_version_tags("Title Slowed Reverb") == "Title"
+    assert strip_version_tags("Money Trees") == "Money Trees"      # intact
+    assert strip_version_tags("Slowed") == "Slowed"                # ne vide pas
     print("✅ self-test OK")
 
 

@@ -10,7 +10,9 @@ import shutil
 import sys
 from pathlib import Path
 
-import yaml
+# NB : PyYAML n'est importé QUE dans les fonctions qui en ont besoin (load_style /
+# create_style), pour que les helpers purs (slugify, strip_version_tags, …) restent
+# importables sans dépendance — utile côté spotify_covers.py et pour les tests.
 
 # Racine du projet (le dossier qui contient `styles/`, `scripts/`, etc.)
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,17 +36,65 @@ def slugify(text: str) -> str:
     return text.strip("_")
 
 
-def title_from_filename(filename: str) -> str:
-    """Extrait le TITRE depuis un nom de fichier 'Artiste - Titre'.
+# --------------------------------------------------------------------------- #
+# Nettoyage des "versions" de morceaux (slowed / sped up / reverb…)
+# --------------------------------------------------------------------------- #
+# Un "token de version" = un mot-clé de remix de tempo/effet. On en retire toute
+# occurrence en fin de titre (après tiret, entre parenthèses/crochets, ou même
+# collée sans séparateur) afin de retrouver le TITRE de la version normale.
+_VER_TOKEN = (
+    r"(?:(?:super|ultra|mega|extra|hyper)\s*)?slowed(?:\s*down)?(?:\s*(?:to\s*perfection|tf))?"
+    r"|sp(?:ed|eed)\s*-?\s*up"
+    r"|reverb(?:ed|ered)?"
+    r"|nightcore|daycore"
+    r"|chopped\s*(?:and|&|n)\s*screwed|screwed"
+)
+# Liaisons possibles entre deux tokens : symbole, mot, ou simple espace.
+_VER_CONNECT = r"(?:\s*[+&/,xX×·]\s*|\s+(?:and|n|with|et|x)\s+|\s+)"
+# Un "bloc de version" = un ou plusieurs tokens enchaînés par des liaisons.
+_VER_BLOB = rf"(?:{_VER_TOKEN})(?:{_VER_CONNECT}(?:{_VER_TOKEN}))*"
 
-    On coupe au PREMIER ' - ' : avant = artiste(s), après = titre (qui peut
-    lui-même contenir des ' - ', ex. 'BAILA LENTO - Slowed'). S'il n'y a pas de
-    ' - ', on renvoie le nom tel quel.
+_VER_PATTERNS = [
+    # (Slowed + Reverb) / [Sped Up] / {Slowed} — n'importe où.
+    re.compile(rf"\s*[\(\[\{{]\s*{_VER_BLOB}\s*[\)\]\}}]\s*", re.IGNORECASE),
+    # - Slowed + Reverb  (tiret puis bloc, jusqu'à la fin).
+    re.compile(rf"\s*[-–—|]\s*{_VER_BLOB}\s*$", re.IGNORECASE),
+    # Slowed  (bloc collé en fin de titre, sans séparateur).
+    re.compile(rf"\s+{_VER_BLOB}\s*$", re.IGNORECASE),
+]
+
+
+def strip_version_tags(title: str) -> str:
+    """Retire les mentions de version (slowed, sped up, reverb…) d'un titre.
+
+    Gère toutes les formes : '- Slowed', '(Slowed)', 'Slowed + Reverb',
+    'Slowed and Reverb', '(Sped Up)', 'super slowed', etc. — avec ou sans tiret,
+    avec ou sans parenthèses. Renvoie le titre de la version NORMALE. Si tout
+    disparaîtrait (titre = juste un mot-clé), on garde le titre d'origine.
     """
-    stem = Path(filename).stem
-    if " - " in stem:
-        return stem.split(" - ", 1)[1].strip()
-    return stem.strip()
+    out = title
+    for pat in _VER_PATTERNS:
+        out = pat.sub(" ", out)
+    out = re.sub(r"\s{2,}", " ", out).strip(" -–—|·")
+    return out or title.strip()
+
+
+def title_from_filename(filename: str) -> str:
+    """Extrait le TITRE (version normale) depuis un nom de fichier 'Artiste - Titre'.
+
+    On retire D'ABORD les mentions de version (slowed / sped up / reverb…) sur le
+    nom entier — car elles sont en fin de nom et utilisent souvent un ' - ' qui
+    fausserait le découpage. On coupe ENSUITE au PREMIER ' - ' : avant = artiste(s),
+    après = titre. S'il ne reste pas de ' - ', on renvoie le nom tel quel.
+
+    Ex : 'Mc Gw - BAILA LENTO - Slowed'  -> 'BAILA LENTO'
+         'BAILA LENTO - Slowed + Reverb' -> 'BAILA LENTO'
+         'Artist - Normal Title'         -> 'Normal Title'
+    """
+    cleaned = strip_version_tags(Path(filename).stem)
+    if " - " in cleaned:
+        return cleaned.split(" - ", 1)[1].strip()
+    return cleaned.strip()
 
 
 def safe_filename(name: str, max_len: int = 120) -> str:
@@ -82,6 +132,7 @@ def load_style(style: str) -> dict:
             f"   Styles disponibles : {', '.join(list_styles()) or '(aucun)'}\n"
             f"   Crée-le avec : python scripts/new_style.py {style}"
         )
+    import yaml
     with open(cfg_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
@@ -135,6 +186,7 @@ def create_style(
         "title_text": title_text,
         "base_model": base_model,
     }
+    import yaml
     with open(sdir / "style.yaml", "w", encoding="utf-8") as f:
         yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
     return sdir

@@ -118,8 +118,10 @@ python scripts/new_style.py phonk \
 
 # 3) Préparer le dataset (redimensionne + crée les légendes)
 python scripts/prepare_dataset.py phonk
-#    Variante : --auto-caption  -> légende chaque image avec un VLM (capte les
-#    variations internes + détecte le titre). Nécessite : pip install mlx-vlm
+#    Captioning par IA (capte les variations internes + détecte le titre), 2 backends :
+#      --auto-caption        -> VLM LOCAL (mlx-vlm), hors-ligne. Nécessite : pip install mlx-vlm
+#      --gemini              -> API Gemini, meilleur OCR du titre stylisé/caché.
+#                               Clé : export GEMINI_API_KEY=... (gratuite sur aistudio.google.com/apikey)
 
 # 4) Entraîner le LoRA du style  (plusieurs heures ; 768px = + rapide)
 python scripts/train_style.py phonk
@@ -202,8 +204,11 @@ au-delà de quelques centaines pour un style. Un dossier vide ne peut rien appre
 **Faut-il légender chaque image ?** Non, c'est automatique. En mode simple, une
 légende minimale et cohérente (`trigger + class_word`) est générée pour chaque
 image — c'est ce qui fait « fondre » tout l'univers du style dans le trigger. Pour
-les styles variés ou avec titres, le mode `--auto-caption` (VLM) décrit chaque
-image et détecte le texte. Détails et stratégie : [docs/GUIDE.md](docs/GUIDE.md).
+les styles variés ou avec titres, l'auto-captioning par IA décrit chaque image et
+détecte le texte. Deux backends, même prompt : **modèle local** (`--auto-caption`,
+hors-ligne) ou **API Gemini** (`--gemini`, meilleur OCR des titres stylisés/cachés —
+recommandé pour les covers où le titre est écrit). Dans l'interface web, tu choisis
+la méthode et colles ta clé Gemini dans la zone dédiée. Détails : [docs/GUIDE.md](docs/GUIDE.md).
 
 **Comment lui faire apprendre la façon d'écrire les titres (ou l'absence de titre) ?**
 Via `title_text` dans `style.yaml` (`yes` / `no` / `mixed`). Le LoRA apprend alors

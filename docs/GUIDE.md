@@ -55,16 +55,31 @@ le trigger. Parfait pour un style très homogène.
 python scripts/prepare_dataset.py phonk           # légendes simples auto
 ```
 
-### Mode AUTO (`--auto`) — pour les styles variés / texte
-Un VLM (Qwen2.5-VL via `mlx-vlm`) décrit **chaque** image (couleurs, sujet,
-compo) et détecte le titre. La légende garde toujours le trigger en tête mais
-ajoute la description → le LoRA distingue mieux les variations internes et tu peux
-les **piloter** ensuite au prompt (« neon », « foggy »…).
+### Mode AUTO — pour les styles variés / texte
+Un VLM décrit **chaque** image (couleurs, sujet, compo) et détecte le titre. La
+légende garde toujours le trigger en tête mais ajoute la description → le LoRA
+distingue mieux les variations internes et tu peux les **piloter** ensuite au
+prompt (« neon », « foggy »…).
+
+Deux backends, **exactement le même prompt et la même logique** (on donne le titre
+connu, le VLM dit seulement s'il est présent et comment il est écrit) :
 
 ```bash
+# Backend LOCAL (hors-ligne, gratuit, Mac Apple Silicon) — Qwen2.5-VL via mlx-vlm
 pip install mlx-vlm
 python scripts/caption.py phonk --auto --overwrite
+
+# Backend API GEMINI (meilleur OCR des titres stylisés/cachés, descriptions plus fines)
+export GEMINI_API_KEY=...        # gratuite : aistudio.google.com/apikey
+python scripts/caption.py phonk --gemini --overwrite
 ```
+
+> 💡 **Lequel choisir ?** Pour des covers **avec titres écrits** (surtout stylisés,
+> verticaux ou à demi cachés), **Gemini** lit le texte bien mieux qu'un modèle
+> local 4-bit, pour quelques centimes le dataset entier. Le **local** reste idéal
+> si tu veux rester 100 % hors-ligne. L'entraînement et la génération, eux, restent
+> toujours locaux. Dans l'interface web, tu choisis la méthode et colles ta clé
+> Gemini dans la zone dédiée (mémorisée dans le navigateur).
 
 **Quand utiliser quoi ?**
 | Situation | Mode |

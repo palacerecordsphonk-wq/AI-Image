@@ -13,7 +13,9 @@ fastapi>=0.110     # serveur API
 uvicorn>=0.27      # serveur ASGI
 python-multipart>=0.0.9   # upload de fichiers depuis le navigateur
 
-# Optionnel : auto-captioning par IA (scripts/caption.py --auto).
-# À installer séparément si tu veux ce mode :  pip install mlx-vlm
+# Optionnel : auto-captioning par IA (scripts/caption.py).
+#  • Backend LOCAL (--auto) : pip install mlx-vlm   (hors-ligne, Mac Apple Silicon)
 # mlx-vlm>=0.1.0
+#  • Backend GEMINI (--gemini) : AUCUNE dépendance (urllib de la stdlib).
+#    Définis simplement GEMINI_API_KEY (clé gratuite sur aistudio.google.com/apikey).
 
