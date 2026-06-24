@@ -22,6 +22,88 @@ OUTPUT_DIR = ROOT / "output"
 # Extensions d'images reconnues (identiques à celles que mflux sait lire)
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
+# --------------------------------------------------------------------------- #
+# Registre des modèles de base (familles FLUX.1 et FLUX.2)
+# --------------------------------------------------------------------------- #
+# Un même style (un seul dataset) peut être entraîné sur plusieurs modèles : on
+# garde donc, pour chaque modèle, TOUT ce qui change entre les familles —
+# commande d'entraînement/génération, modèle base vs distillé, fenêtre de
+# timesteps, et surtout les COUCHES LoRA ciblées (l'architecture diffère).
+#
+# Les cibles FLUX.2 reproduisent VERBATIM la config d'exemple officielle de mflux
+# (src/mflux/models/flux2/README.md) : ne pas "inventer" ces chemins, sinon
+# l'entraînement plante après avoir chargé le modèle.
+
+DEFAULT_MODEL = "flux1-dev"
+
+MODELS: dict[str, dict] = {
+    "flux1-dev": {
+        "label": "FLUX.1 dev",
+        "family": "flux1",
+        "train_model": "dev",        # modèle utilisé pour l'entraînement
+        "gen_model": "dev",          # modèle utilisé pour la génération
+        "gen_cmd": "mflux-generate",
+        "gen_steps": 25,
+        "gen_guidance": 3.5,
+        "train_steps": 20,
+        "train_guidance": 1.0,
+        "timestep_low": 0,
+        "timestep_high": 20,
+    },
+    "flux2-klein-9b": {
+        "label": "FLUX.2 Klein 9B (qualité max)",
+        "family": "flux2",
+        "train_model": "flux2-klein-base-9b",   # base non-distillé -> LoRA propre
+        "gen_model": "flux2-klein-9b",           # distillé -> génération rapide (~4 steps)
+        "gen_cmd": "mflux-generate-flux2",
+        "gen_steps": 4,
+        "gen_guidance": 2.5,
+        "train_steps": 40,
+        "train_guidance": 1.0,
+        "timestep_low": 25,
+        "timestep_high": 40,
+    },
+    "flux2-klein-4b": {
+        "label": "FLUX.2 Klein 4B (rapide)",
+        "family": "flux2",
+        "train_model": "flux2-klein-base-4b",
+        "gen_model": "flux2-klein-4b",
+        "gen_cmd": "mflux-generate-flux2",
+        "gen_steps": 4,
+        "gen_guidance": 2.5,
+        "train_steps": 40,
+        "train_guidance": 1.0,
+        "timestep_low": 25,
+        "timestep_high": 40,
+    },
+}
+
+# Anciennes valeurs de `base_model` (avant le multi-modèle) -> clé du registre.
+_LEGACY_MODEL = {
+    "dev": "flux1-dev",
+    "schnell": "flux1-dev",
+    "krea-dev": "flux1-dev",
+    "dev-krea": "flux1-dev",
+}
+
+
+def resolve_model_key(value: str | None) -> str:
+    """Normalise une valeur de modèle (clé du registre ou ancien base_model)."""
+    if value and value in MODELS:
+        return value
+    return _LEGACY_MODEL.get((value or "").strip().lower(), DEFAULT_MODEL)
+
+
+def model_spec(model_key: str) -> dict:
+    """Retourne la fiche d'un modèle (lève une erreur claire si inconnu)."""
+    key = resolve_model_key(model_key)
+    return MODELS[key]
+
+
+def model_slug(model_key: str) -> str:
+    """Sous-dossier de checkpoints d'un modèle (sûr pour le système de fichiers)."""
+    return slugify(resolve_model_key(model_key)) or "model"
+
 
 def die(message: str) -> "NoReturn":  # type: ignore[name-defined]
     """Affiche une erreur lisible et quitte avec un code non nul."""
@@ -383,19 +465,55 @@ def random_extra(style: str, *, rng=None, k_min: int = 2, k_max: int = 4) -> str
     return ", ".join(rng.sample(vocab, k))
 
 
-def latest_checkpoint(style: str) -> Path | None:
+def training_dir(style: str, model_key: str | None = None) -> Path:
+    """Dossier des checkpoints d'un style pour un modèle donné.
+
+    Multi-modèle : chaque modèle a son sous-dossier `training/<model_slug>/`.
+    Sans model_key on renvoie la racine `training/` (compat ancienne disposition).
+    """
+    root = style_dir(style) / "training"
+    return root / model_slug(model_key) if model_key else root
+
+
+def latest_checkpoint(style: str, model_key: str | None = None) -> Path | None:
     """Retourne le checkpoint .zip le plus récent (le plus entraîné) d'un style.
 
     Les checkpoints mflux sont nommés `NNNNNNN_checkpoint.zip` où NNNNNNN est le
     nombre d'itérations. On prend donc le plus grand numéro disponible.
+
+    Si `model_key` est fourni, on cherche dans `training/<model_slug>/`. Pour le
+    modèle FLUX.1 par défaut, on retombe sur l'ancienne racine `training/` afin de
+    rester compatible avec les styles entraînés avant le multi-modèle.
     """
-    training_root = style_dir(style) / "training"
-    if not training_root.exists():
+    candidates: list[Path] = []
+    if model_key:
+        sub = training_dir(style, model_key)
+        if sub.exists():
+            candidates = list(sub.rglob("*_checkpoint.zip"))
+        # Repli legacy : anciens checkpoints FLUX.1 rangés directement sous
+        # training/ (avant le multi-modèle). On exclut les sous-dossiers par-modèle
+        # pour ne pas confondre les checkpoints d'un autre modèle.
+        if not candidates and resolve_model_key(model_key) == DEFAULT_MODEL:
+            root = style_dir(style) / "training"
+            if root.exists():
+                model_slugs = {model_slug(k) for k in MODELS}
+                candidates = [
+                    p for p in root.rglob("*_checkpoint.zip")
+                    if p.relative_to(root).parts[0] not in model_slugs
+                ]
+    else:
+        root = style_dir(style) / "training"
+        if root.exists():
+            candidates = list(root.rglob("*_checkpoint.zip"))
+    if not candidates:
         return None
-    checkpoints = sorted(training_root.rglob("*_checkpoint.zip"))
-    if not checkpoints:
-        return None
-    return max(checkpoints, key=lambda p: _checkpoint_iterations(p))
+    return max(candidates, key=lambda p: _checkpoint_iterations(p))
+
+
+def trained_models(style: str) -> list[str]:
+    """Liste les clés de modèles pour lesquels ce style a au moins un checkpoint."""
+    out = [k for k in MODELS if latest_checkpoint(style, k) is not None]
+    return out
 
 
 def _checkpoint_iterations(path: Path) -> int:

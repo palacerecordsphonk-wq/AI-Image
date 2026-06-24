@@ -14,6 +14,33 @@ async function api(method, url, body) {
   return res.json();
 }
 
+// ----- Models registry (FLUX.1 / FLUX.2) -------------------------------------
+let MODELS = [];          // [{key,label,family}]
+let DEFAULT_MODEL = "flux1-dev";
+async function loadModels() {
+  if (MODELS.length) return MODELS;
+  try {
+    const r = await api("GET", "/api/models");
+    MODELS = r.models || [];
+    DEFAULT_MODEL = r.default || DEFAULT_MODEL;
+  } catch (e) { MODELS = []; }
+  return MODELS;
+}
+function modelLabel(key) {
+  const m = MODELS.find((x) => x.key === key);
+  return m ? m.label : key;
+}
+function modelFamily(key) {
+  const m = MODELS.find((x) => x.key === key);
+  return m ? m.family : "flux1";
+}
+// Presets d'inférence par famille (FLUX.2 Klein = distillé, ~4 steps).
+function applyModelPresets(key) {
+  const fam = modelFamily(key);
+  if (fam === "flux2") { $("#genSteps").value = 4; $("#genGuid").value = 2.5; }
+  else { $("#genSteps").value = 25; $("#genGuid").value = 3.5; }
+}
+
 let toastTimer;
 function toast(msg, isErr = false) {
   const t = $("#toast");
@@ -161,6 +188,9 @@ async function renderDetail() {
 
     <div class="card">
       <div class="step-title"><span class="step-num">3</span><h2>Entraîner le style (LoRA)</h2></div>
+      <label>Modèle de base à entraîner</label>
+      <select id="trModel"></select>
+      <div class="hint">Un même dataset peut entraîner plusieurs modèles (FLUX.1 et FLUX.2). Chaque entraînement crée un LoRA séparé, sélectionnable ensuite à la génération.</div>
       <div class="row-inputs three">
         <div><label>Résolution d'entraînement</label>
           <select id="trMaxRes">
@@ -182,6 +212,15 @@ async function renderDetail() {
     </div>`;
 
   loadThumbs();
+  // Sélecteur de modèle à entraîner (FLUX.1 / FLUX.2), avec marquage "entraîné".
+  loadModels().then(() => {
+    const sel = $("#trModel");
+    if (!sel) return;
+    const done = s.trained_models || [];
+    const preferred = MODELS.find((m) => m.key === s.base_model) ? s.base_model : DEFAULT_MODEL;
+    sel.innerHTML = MODELS.map((m) =>
+      `<option value="${m.key}" ${m.key === preferred ? "selected" : ""}>${m.label}${done.includes(m.key) ? " ✓" : ""}</option>`).join("");
+  });
   $("#btnImportPath").onclick = importPath;
   $("#btnUpload").onclick = () => $("#fileInput").click();
   $("#fileInput").onchange = uploadFiles;
@@ -253,6 +292,7 @@ async function startTrain() {
   try {
     const job = await api("POST", `/api/styles/${currentStyle}/train`, {
       max_resolution: +$("#trMaxRes").value, total_steps: +$("#trSteps").value, rank: +$("#trRank").value,
+      model: $("#trModel") ? $("#trModel").value : null,
     });
     toast("Entraînement lancé. Tu peux suivre le journal.");
     pollJob(job.id, {
@@ -280,11 +320,31 @@ $("#nsCreate").onclick = async () => {
 };
 
 // ----- Generation ------------------------------------------------------------
+let GEN_STYLES = [];
 async function loadStyleOptions() {
-  const styles = await api("GET", "/api/styles");
+  await loadModels();
+  GEN_STYLES = await api("GET", "/api/styles");
   const sel = $("#genStyle");
-  sel.innerHTML = styles.map((s) =>
+  sel.innerHTML = GEN_STYLES.map((s) =>
     `<option value="${s.name}">${s.name}${s.trained ? "" : " (non entraîné)"}</option>`).join("");
+  sel.onchange = updateGenModels;
+  updateGenModels();
+}
+
+// Le menu Modèle (génération) liste les modèles ENTRAÎNÉS pour le style choisi.
+function updateGenModels() {
+  const s = GEN_STYLES.find((x) => x.name === $("#genStyle").value);
+  const sel = $("#genModel");
+  const trained = (s && s.trained_models) || [];
+  if (!trained.length) {
+    // Aucun LoRA entraîné : on liste tout, en signalant que ce n'est pas prêt.
+    sel.innerHTML = MODELS.map((m) =>
+      `<option value="${m.key}">${m.label} (non entraîné)</option>`).join("");
+  } else {
+    sel.innerHTML = trained.map((k) => `<option value="${k}">${modelLabel(k)}</option>`).join("");
+  }
+  sel.onchange = () => applyModelPresets(sel.value);
+  applyModelPresets(sel.value);
 }
 
 async function runGenerate(random = false) {
@@ -294,6 +354,7 @@ async function runGenerate(random = false) {
     extra: $("#genExtra").value,
     title_mode: $("#genTitleMode").value,
     grain: $("#genGrain").value,
+    model: $("#genModel").value || null,
     random,
     width: +$("#genW").value, height: +$("#genH").value,
     steps: +$("#genSteps").value, guidance: +$("#genGuid").value,

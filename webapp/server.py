@@ -190,6 +190,7 @@ class TrainReq(BaseModel):
     total_steps: int = 1200
     rank: int = 16
     quantize: int | None = 8
+    model: str | None = None  # clé du registre (flux1-dev, flux2-klein-9b, …)
 
 
 class SpotifyReq(BaseModel):
@@ -212,6 +213,7 @@ class GenerateReq(BaseModel):
     title_mode: str = "auto"  # auto | text | notext
     grain: str = "auto"       # auto | none | light | medium | heavy
     random: bool = False      # composer un prompt aléatoire depuis le style appris
+    model: str | None = None  # clé du registre (flux1-dev, flux2-klein-9b, …)
     steps: int = 25
     guidance: float = 3.5
     width: int = 1024
@@ -224,6 +226,18 @@ class GenerateReq(BaseModel):
 # --------------------------------------------------------------------------- #
 # Endpoints : styles
 # --------------------------------------------------------------------------- #
+@app.get("/api/models")
+def api_models() -> dict:
+    """Liste les modèles de base disponibles (FLUX.1 / FLUX.2) pour l'UI."""
+    return {
+        "default": lib.DEFAULT_MODEL,
+        "models": [
+            {"key": k, "label": v["label"], "family": v["family"]}
+            for k, v in lib.MODELS.items()
+        ],
+    }
+
+
 @app.get("/api/styles")
 def api_styles() -> list[dict]:
     out = []
@@ -232,7 +246,7 @@ def api_styles() -> list[dict]:
         sdir = lib.style_dir(name)
         raw = lib.find_images(sdir / "raw")
         dataset = lib.find_images(sdir / "dataset")
-        ckpt = lib.latest_checkpoint(name)
+        trained = lib.trained_models(name)
         out.append({
             "name": name,
             "trigger": cfg["trigger"],
@@ -241,8 +255,8 @@ def api_styles() -> list[dict]:
             "base_model": cfg["base_model"],
             "raw_count": len(raw),
             "dataset_count": len(dataset),
-            "trained": ckpt is not None,
-            "checkpoint": ckpt.name if ckpt else None,
+            "trained": bool(trained),
+            "trained_models": trained,  # clés des modèles ayant un checkpoint
             "raw_path": str((sdir / "raw").resolve()),
         })
     return out
@@ -360,6 +374,8 @@ def api_train(name: str, req: TrainReq) -> dict:
         "--total-steps", str(req.total_steps),
         "--rank", str(req.rank),
     ]
+    if req.model:
+        cmd += ["--model", lib.resolve_model_key(req.model)]
     if req.quantize is None:
         cmd.append("--no-quantize")
     else:
@@ -398,6 +414,8 @@ def api_generate(req: GenerateReq) -> dict:
     cmd += ["--grain", grain]
     if req.random:
         cmd.append("--random")
+    if req.model:
+        cmd += ["--model", lib.resolve_model_key(req.model)]
 
     def _done(job: Job) -> None:
         if out_path.exists():

@@ -39,6 +39,13 @@ def ensure_mflux() -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Entraîner le LoRA d'un style.")
     parser.add_argument("style", help="Nom du style.")
+    parser.add_argument(
+        "--model",
+        dest="model_key",
+        default=None,
+        help="Modèle à entraîner (flux1-dev, flux2-klein-9b, flux2-klein-4b). "
+             "Défaut : le base_model du style. Les checkpoints sont rangés par modèle.",
+    )
     parser.add_argument("--total-steps", type=int, default=1200, help="Itérations cibles (~).")
     parser.add_argument("--rank", type=int, default=16, help="Rang du LoRA (8-32).")
     parser.add_argument("--quantize", type=int, default=8, choices=[3, 4, 6, 8])
@@ -68,13 +75,14 @@ def main() -> None:
     else:
         config = build_config(
             args.style,
+            model_key=args.model_key,
             total_steps=args.total_steps,
             rank=args.rank,
             quantize=None if args.no_quantize else args.quantize,
             max_resolution=args.max_resolution,
             learning_rate=args.learning_rate,
         )
-        config_path = write_config(args.style, config)
+        config_path = write_config(args.style, config, args.model_key)
         loop = config["training_loop"]
         print(f"✅ Config : {config_path}")
         print(

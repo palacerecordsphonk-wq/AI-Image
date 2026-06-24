@@ -24,15 +24,17 @@ import zipfile
 from pathlib import Path
 
 from lib import (GRAIN_PROMPT, OUTPUT_DIR, die, latest_checkpoint, load_style,
-                 random_extra, slugify, style_dir)
+                 model_spec, random_extra, resolve_model_key, slugify,
+                 style_dir, trained_models)
 
 
-def ensure_mflux() -> str:
-    exe = shutil.which("mflux-generate")
+def ensure_mflux(cmd_name: str = "mflux-generate") -> str:
+    exe = shutil.which(cmd_name)
     if not exe:
         die(
-            "Commande 'mflux-generate' introuvable.\n"
-            "   Installe les dépendances sur ton Mac : pip install -r requirements.txt"
+            f"Commande '{cmd_name}' introuvable.\n"
+            "   Installe/maj les dépendances sur ton Mac : pip install -r requirements.txt\n"
+            "   (FLUX.2 nécessite une version récente de mflux.)"
         )
     return exe
 
@@ -114,8 +116,21 @@ def main() -> None:
         action="store_true",
         help="Sans inspiration : compose un prompt aléatoire depuis le vocabulaire appris du style.",
     )
-    parser.add_argument("--steps", type=int, default=25, help="Pas d'inférence (défaut 25).")
-    parser.add_argument("--guidance", type=float, default=3.5, help="Guidance scale (défaut 3.5).")
+    parser.add_argument(
+        "--model",
+        dest="model_key",
+        default=None,
+        help="Modèle de génération (flux1-dev, flux2-klein-9b, flux2-klein-4b). "
+             "Défaut : le base_model du style. Charge le checkpoint entraîné pour ce modèle.",
+    )
+    parser.add_argument(
+        "--steps", type=int, default=None,
+        help="Pas d'inférence (défaut : selon le modèle — 25 FLUX.1, 4 FLUX.2 Klein).",
+    )
+    parser.add_argument(
+        "--guidance", type=float, default=None,
+        help="Guidance scale (défaut : selon le modèle).",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Graine (défaut : aléatoire).")
     parser.add_argument("--width", type=int, default=1024)
     parser.add_argument("--height", type=int, default=1024)
@@ -130,20 +145,32 @@ def main() -> None:
     parser.add_argument("--output", default=None, help="Chemin de sortie de l'image.")
     args = parser.parse_args()
 
-    exe = ensure_mflux()
     cfg = load_style(args.style)
+    # Modèle choisi (clé du registre) : explicite, sinon le préféré du style.
+    model_key = resolve_model_key(args.model_key or cfg["base_model"])
+    spec = model_spec(model_key)
+    exe = ensure_mflux(spec["gen_cmd"])
+    # Steps/guidance par défaut selon le modèle (FLUX.2 Klein = ~4 steps).
+    steps = args.steps if args.steps is not None else spec["gen_steps"]
+    guidance = args.guidance if args.guidance is not None else spec["gen_guidance"]
 
-    # 1. Trouver et extraire le LoRA
+    # 1. Trouver et extraire le LoRA (checkpoint entraîné POUR ce modèle)
     if args.checkpoint:
         ckpt = Path(args.checkpoint)
         if not ckpt.exists():
             die(f"Checkpoint introuvable : {ckpt}")
     else:
-        ckpt = latest_checkpoint(args.style)
+        ckpt = latest_checkpoint(args.style, model_key)
         if ckpt is None:
+            trained = trained_models(args.style)
+            hint = (
+                f"   Modèles déjà entraînés pour ce style : {', '.join(trained)}\n"
+                if trained else ""
+            )
             die(
-                f"Aucun checkpoint pour '{args.style}'.\n"
-                f"   Entraîne d'abord : python scripts/train_style.py {args.style}"
+                f"Aucun checkpoint '{spec['label']}' pour '{args.style}'.\n"
+                f"{hint}"
+                f"   Entraîne-le : python scripts/train_style.py {args.style} --model {model_key}"
             )
     adapter = extract_adapter(ckpt)
 
@@ -170,15 +197,15 @@ def main() -> None:
         out = OUTPUT_DIR / f"{args.style}_{slug}.png"
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    # 4. Lancer mflux-generate
+    # 4. Lancer la génération (commande + modèle selon la famille FLUX.1/FLUX.2)
     cmd = [
         exe,
-        "--model", cfg["base_model"],
+        "--model", spec["gen_model"],
         "--prompt", prompt,
         "--lora-paths", str(adapter),
         "--lora-scales", str(args.lora_scale),
-        "--steps", str(args.steps),
-        "--guidance", str(args.guidance),
+        "--steps", str(steps),
+        "--guidance", str(guidance),
         "--width", str(args.width),
         "--height", str(args.height),
         "--output", str(out),
@@ -189,7 +216,7 @@ def main() -> None:
     if args.seed is not None:
         cmd += ["--seed", str(args.seed)]
 
-    print(f"🎨 Style : {args.style}  | LoRA : {ckpt.name}")
+    print(f"🎨 Style : {args.style}  | Modèle : {spec['label']}  | LoRA : {ckpt.name}")
     print(f"📝 Prompt : {prompt}")
     print(f"💾 Sortie : {out}")
     print(f"▶️  {' '.join(cmd)}")
