@@ -319,9 +319,20 @@ def api_style_images(name: str) -> dict:
     raw = lib.find_images(sdir / "raw")
     imgs = dataset if dataset else raw
     folder = "dataset" if dataset else "raw"
+    items = []
+    for p in imgs[:60]:
+        caption = ""
+        if folder == "dataset":
+            # La légende d'entraînement est le .txt à côté de l'image préparée.
+            txt = p.with_suffix(".txt")
+            if txt.exists():
+                caption = txt.read_text(encoding="utf-8", errors="replace").strip()
+        items.append({"url": f"/media/{name}/{folder}/{p.name}", "caption": caption})
     return {
         "folder": folder,
-        "images": [f"/media/{name}/{folder}/{p.name}" for p in imgs[:60]],
+        "items": items,
+        # Rétro-compat : ancienne clé "images" (URLs seules).
+        "images": [it["url"] for it in items],
         "total": len(imgs),
     }
 

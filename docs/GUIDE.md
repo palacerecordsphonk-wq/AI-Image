@@ -55,11 +55,23 @@ le trigger. Parfait pour un style très homogène.
 python scripts/prepare_dataset.py phonk           # légendes simples auto
 ```
 
-### Mode AUTO — pour les styles variés / texte
-Un VLM décrit **chaque** image (couleurs, sujet, compo) et détecte le titre. La
-légende garde toujours le trigger en tête mais ajoute la description → le LoRA
-distingue mieux les variations internes et tu peux les **piloter** ensuite au
-prompt (« neon », « foggy »…).
+### Mode AUTO — pour les styles variés / texte / pouvoir CRÉER du neuf
+Un VLM décrit **chaque** image et détecte le titre. La légende garde toujours le
+trigger en tête, puis ajoute une **description riche et structurée** (~25-45 mots) :
+sujet + pose, éléments secondaires, décor, palette, lumière, composition/cadrage,
+effets de rendu (glow, bloom, halftone, chrome, splatter…). Le LoRA distingue
+ainsi le **contenu variable** (qu'il peut recombiner pour inventer de nouvelles
+covers) de la **signature constante du style** (portée par le trigger).
+
+> 🎯 C'est le mode à utiliser si tu veux que l'IA **comprenne tout** et **génère
+> des variations originales** dans le style : on décrit richement ce qui change
+> d'une image à l'autre, et le trigger absorbe ce qui ne change jamais. À l'inverse,
+> pour un style ultra-homogène, le mode SIMPLE (légende minimale) maximise la
+> cohésion. Le grain est, lui, mesuré et ajouté séparément (voir §4).
+
+> 👁️ **Vérifie tes légendes** : dans l'interface web, après la préparation, chaque
+> vignette du dataset affiche sa légende sous l'image — tu vois exactement ce que
+> Gemini a compris avant de lancer l'entraînement.
 
 Deux backends, **exactement le même prompt et la même logique** (on donne le titre
 connu, le VLM dit seulement s'il est présent et comment il est écrit) :

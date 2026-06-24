@@ -241,8 +241,24 @@ async function loadThumbs() {
     const data = await api("GET", `/api/styles/${currentStyle}/images`);
     const el = $("#thumbs");
     if (!el) return;
-    el.innerHTML = data.images.map((u) => `<img src="${u}" loading="lazy" />`).join("");
+    const items = data.items || (data.images || []).map((u) => ({ url: u, caption: "" }));
+    const hasCaps = items.some((it) => it.caption);
+    el.classList.toggle("captioned", data.folder === "dataset" && hasCaps);
+    el.innerHTML = items.map((it) => {
+      if (data.folder === "dataset") {
+        const cap = it.caption
+          ? `<div class="cap">${escapeHtml(it.caption)}</div>`
+          : `<div class="cap muted">— pas encore de légende —</div>`;
+        return `<figure class="thumb"><img src="${it.url}" loading="lazy" title="${escapeHtml(it.caption)}" />${cap}</figure>`;
+      }
+      return `<img src="${it.url}" loading="lazy" />`;
+    }).join("");
   } catch (e) {}
+}
+
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 async function importPath() {
