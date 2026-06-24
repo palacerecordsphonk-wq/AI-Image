@@ -140,12 +140,22 @@ async function renderDetail() {
             <option value="3000">3000 (ultra)</option>
           </select>
         </div>
-        <div><label>&nbsp;</label>
-          <div class="checkbox"><input type="checkbox" id="prepAuto" checked />
-          <span>Auto-captioning IA (détecte tout + le titre)</span></div>
+        <div><label>Méthode de captioning (IA)</label>
+          <select id="prepBackend">
+            <option value="gemini" selected>Gemini (API — meilleur OCR du titre)</option>
+            <option value="local">Modèle local (~5 Go, hors-ligne, Mac)</option>
+            <option value="simple">Aucune (légende minimale)</option>
+          </select>
         </div>
       </div>
-      <div class="hint">Résolution = définition à laquelle les covers sont stockées (Ultra = garde la pleine qualité HD). L'auto-captioning IA décrit chaque image (couleurs, ambiance, perso, typo) et détecte le titre — télécharge un modèle (~5 Go) au 1er usage.</div>
+
+      <div id="prepGeminiBox" class="key-box">
+        <label>🔑 Clé API Gemini</label>
+        <input type="password" id="prepGeminiKey" placeholder="Colle ta clé Gemini (AIza…)" />
+        <div class="hint">Gratuite sur <b>aistudio.google.com/apikey</b>. Mémorisée uniquement dans ce navigateur (localStorage), envoyée seulement à l'API Gemini pour décrire tes covers.</div>
+      </div>
+
+      <div class="hint">Résolution = définition à laquelle les covers sont stockées (Ultra = pleine qualité HD). L'auto-captioning décrit chaque image (couleurs, ambiance, perso, typo) et détecte le titre. <b>Gemini</b> lit bien mieux les titres stylisés/cachés ; le <b>modèle local</b> reste hors-ligne et gratuit (télécharge ~5 Go au 1er usage).</div>
       <div class="btn-row"><button id="btnPrepare">Préparer le dataset</button></div>
     </div>
 
@@ -177,6 +187,14 @@ async function renderDetail() {
   $("#fileInput").onchange = uploadFiles;
   $("#btnPrepare").onclick = startPrepare;
   $("#btnTrain").onclick = startTrain;
+
+  // Captioning : restaure la clé Gemini mémorisée + montre la zone selon la méthode.
+  $("#prepGeminiKey").value = localStorage.getItem("gemini_key") || "";
+  const syncBackend = () => {
+    $("#prepGeminiBox").style.display = $("#prepBackend").value === "gemini" ? "block" : "none";
+  };
+  $("#prepBackend").onchange = syncBackend;
+  syncBackend();
 }
 
 async function loadThumbs() {
@@ -212,9 +230,17 @@ async function uploadFiles(ev) {
 }
 
 async function startPrepare() {
+  const backend = $("#prepBackend").value;
+  const geminiKey = $("#prepGeminiKey").value.trim();
+  if (backend === "gemini") {
+    if (!geminiKey) return toast("Colle ta clé API Gemini (ou choisis une autre méthode).", true);
+    localStorage.setItem("gemini_key", geminiKey);  // mémorise dans ce navigateur
+  }
   try {
     const job = await api("POST", `/api/styles/${currentStyle}/prepare`, {
-      size: +$("#prepSize").value, auto_caption: $("#prepAuto").checked,
+      size: +$("#prepSize").value,
+      caption_backend: backend,
+      gemini_api_key: backend === "gemini" ? geminiKey : null,
     });
     pollJob(job.id, {
       logEl: $("#jobLog"), statusEl: $("#jobStatus"),

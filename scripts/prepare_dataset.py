@@ -20,7 +20,7 @@ import argparse
 
 from PIL import Image, ImageOps
 
-from caption import generate_captions
+from caption import DEFAULT_GEMINI, generate_captions
 from lib import (IMAGE_EXTS, die, find_images, safe_filename, style_dir,
                  title_from_filename)
 
@@ -57,7 +57,17 @@ def main() -> None:
     parser.add_argument(
         "--auto-caption",
         action="store_true",
-        help="Légender avec un VLM (mlx-vlm) au lieu du mode simple.",
+        help="Légender avec le VLM LOCAL (mlx-vlm) au lieu du mode simple.",
+    )
+    parser.add_argument(
+        "--gemini",
+        action="store_true",
+        help="Légender via l'API Gemini (meilleur OCR du titre). Nécessite une clé.",
+    )
+    parser.add_argument(
+        "--gemini-model",
+        default=DEFAULT_GEMINI,
+        help=f"Modèle Gemini pour --gemini (défaut : {DEFAULT_GEMINI}).",
     )
     args = parser.parse_args()
 
@@ -115,7 +125,14 @@ def main() -> None:
         )
 
     if not args.no_caption:
-        generate_captions(args.style, overwrite=True, auto=args.auto_caption, quiet=False)
+        backend = "gemini" if args.gemini else "local" if args.auto_caption else "simple"
+        generate_captions(
+            args.style,
+            overwrite=True,
+            backend=backend,
+            gemini_model=args.gemini_model,
+            quiet=False,
+        )
 
     print()
     print(f"Étape suivante : python scripts/train_style.py {args.style}")

@@ -70,8 +70,12 @@ class JobManager:
         return None
 
     def start(self, kind: str, cmd: list[str], style: str | None = None,
-              on_done=None) -> Job:
+              on_done=None, env: dict | None = None) -> Job:
+        import os
         import subprocess
+
+        # Variables d'env supplémentaires (ex. clé API) — JAMAIS écrites dans le log.
+        run_env = {**os.environ, **env} if env else None
 
         with self._lock:
             # Seules les tâches "lourdes" (GPU) sont mutuellement exclusives.
@@ -95,7 +99,7 @@ class JobManager:
                 try:
                     proc = subprocess.Popen(
                         cmd, cwd=str(ROOT), stdout=logf, stderr=subprocess.STDOUT,
-                        text=True,
+                        text=True, env=run_env,
                     )
                     job._proc = proc
                     rc = proc.wait()
@@ -174,7 +178,11 @@ class ImportPath(BaseModel):
 
 class PrepareReq(BaseModel):
     size: int = 1024
-    auto_caption: bool = True
+    # Backend de captioning : "simple" (sans IA), "local" (mlx-vlm) ou "gemini" (API).
+    caption_backend: str = "local"
+    gemini_api_key: str | None = None
+    # Rétro-compat : ancien booléen (true -> local). Ignoré si caption_backend fourni.
+    auto_caption: bool | None = None
 
 
 class TrainReq(BaseModel):
@@ -319,10 +327,25 @@ def api_media(name: str, folder: str, filename: str):
 @app.post("/api/styles/{name}/prepare")
 def api_prepare(name: str, req: PrepareReq) -> dict:
     _require_style(name)
+    # Détermine le backend (caption_backend prioritaire, sinon l'ancien booléen).
+    backend = (req.caption_backend or "").strip().lower()
+    if backend not in {"simple", "local", "gemini"}:
+        backend = "local" if req.auto_caption else "simple"
+
     cmd = [PYTHON, str(SCRIPTS / "prepare_dataset.py"), name, "--size", str(req.size)]
-    if req.auto_caption:
+    env = None
+    if backend == "local":
         cmd.append("--auto-caption")
-    job = jobs.start("prepare", cmd, style=name)
+    elif backend == "gemini":
+        key = (req.gemini_api_key or "").strip()
+        if not key:
+            raise HTTPException(400, "Clé API Gemini requise pour le captioning Gemini.")
+        cmd.append("--gemini")
+        # Clé passée par l'environnement -> jamais visible dans le log de commande.
+        env = {"GEMINI_API_KEY": key}
+    # backend == "simple" : aucune option (légendes minimales).
+
+    job = jobs.start("prepare", cmd, style=name, env=env)
     return job_dict(job)
 
 
