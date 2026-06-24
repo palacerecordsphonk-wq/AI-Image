@@ -53,7 +53,8 @@ Quatre onglets :
 - **🎚️ Fine-tune** — crée un style, importe un dossier d'images (par chemin ou
   upload), prépare + auto-captioning IA, puis entraîne le LoRA. Journal en direct.
 - **🎨 Génération** — choisis le style, écris le titre + une description, règle les
-  options, génère, et vois l'image apparaître.
+  options (dont le **grain** et un bouton **🎲 Aléatoire**), génère, et vois l'image
+  apparaître.
 - **⬇️ Spotify** — colle un lien de playlist Spotify et choisis **un style existant**
   (les covers s'y ajoutent) ou **crée un nouveau style** (le dossier est créé dans le
   projet). Toutes les covers sont téléchargées dans `styles/<style>/raw/`, nommées
@@ -122,6 +123,8 @@ python scripts/prepare_dataset.py phonk
 #      --auto-caption        -> VLM LOCAL (mlx-vlm), hors-ligne. Nécessite : pip install mlx-vlm
 #      --gemini              -> API Gemini, meilleur OCR du titre stylisé/caché.
 #                               Clé : export GEMINI_API_KEY=... (gratuite sur aistudio.google.com/apikey)
+#    Le GRAIN de chaque image est aussi mesuré et inscrit dans la légende -> il devient
+#    un attribut appris, dosable à la génération (--grain none|light|medium|heavy).
 
 # 4) Entraîner le LoRA du style  (plusieurs heures ; 768px = + rapide)
 python scripts/train_style.py phonk
@@ -186,6 +189,8 @@ de régler quoi que ce soit, le script s'adapte.
 | `--title` | — | Titre du morceau (écrit dans l'image par défaut). |
 | `--no-title-text` | off | Le titre devient un simple thème, non écrit. |
 | `--extra` | — | Détails additionnels (lieu, ambiance, couleurs…). |
+| `--random` | off | Pas d'inspiration ? Compose un prompt aléatoire depuis le vocabulaire appris du style (+ titre si fourni, seed aléatoire). |
+| `--grain` | auto | Dosage du grain : `auto` (comme appris), `none` (clean forcé), `light`/`medium`/`heavy`. |
 | `--lora-scale` | 1.0 | Force du style (0.7 = discret, 1.2 = très marqué). |
 | `--steps` | 25 | Plus = + de détail (et + lent). |
 | `--seed` | aléatoire | Fixe-la pour reproduire/varier une image. |

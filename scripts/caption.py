@@ -59,7 +59,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from lib import die, find_images, load_style, style_dir
+from lib import GRAIN_CAPTION, detect_grain, die, find_images, load_style, style_dir
 
 DEFAULT_VLM = "mlx-community/Qwen2.5-VL-7B-Instruct-4bit"
 DEFAULT_GEMINI = "gemini-2.5-flash"
@@ -107,7 +107,14 @@ def _show_title(cfg: dict, vlm_has_title: bool) -> bool:
     return vlm_has_title  # mixed -> ce que voit le VLM
 
 
-def _build_simple_caption(cfg: dict, title: str, caption: str | None) -> str:
+def _grain_note(grain: str | None) -> str:
+    """Mention de grain à insérer dans la légende (vide si non détecté/désactivé)."""
+    return GRAIN_CAPTION.get(grain or "", "")
+
+
+def _build_simple_caption(
+    cfg: dict, title: str, caption: str | None, grain: str | None = None
+) -> str:
     """Légende minimale (mode simple), avec le vrai titre si le style en a."""
     if caption:
         return caption.format(trigger=cfg["trigger"], base_prompt=cfg["base_prompt"],
@@ -117,6 +124,9 @@ def _build_simple_caption(cfg: dict, title: str, caption: str | None) -> str:
     # style l'écrit toujours (yes). En "mixed", préférer --auto.
     if cfg["title_text"] == "yes" and title:
         parts.append(f'with the title text "{title}"')
+    note = _grain_note(grain)
+    if note:
+        parts.append(note)
     return ", ".join(parts)
 
 
@@ -131,11 +141,12 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
-def _compose_caption(cfg: dict, title: str, data: dict) -> str:
+def _compose_caption(cfg: dict, title: str, data: dict, grain: str | None = None) -> str:
     """Assemble la légende finale à partir du JSON renvoyé par un VLM.
 
     Identique quel que soit le backend (local ou Gemini) : trigger en tête, puis
-    la description, puis le titre réel s'il est présent + son style d'écriture.
+    la description, puis le titre réel s'il est présent + son style d'écriture, et
+    enfin la mention de grain détectée (le grain est mesuré, pas deviné par le VLM).
     """
     parts = [cfg["trigger"], cfg["class_word"]]
     desc = str(data.get("caption", "")).strip().strip(".")
@@ -147,10 +158,13 @@ def _compose_caption(cfg: dict, title: str, data: dict) -> str:
         if style:
             note += f", {style}"
         parts.append(note)
+    gnote = _grain_note(grain)
+    if gnote:
+        parts.append(gnote)
     return ", ".join(p for p in parts if p)
 
 
-def _vlm_caption(image_path, cfg: dict, title: str, model: str) -> str:
+def _vlm_caption(image_path, cfg: dict, title: str, model: str, grain: str | None = None) -> str:
     """Décrit une image avec un VLM LOCAL (mlx-vlm), en lui FOURNISSANT le titre.
 
     Le VLM ne devine pas le texte : on lui donne le titre (nom du fichier) et il
@@ -169,10 +183,12 @@ def _vlm_caption(image_path, cfg: dict, title: str, model: str) -> str:
         raise RuntimeError(proc.stderr.strip() or "échec mlx_vlm")
 
     data = _extract_json(proc.stdout) or {}
-    return _compose_caption(cfg, title, data)
+    return _compose_caption(cfg, title, data, grain)
 
 
-def _gemini_caption(image_path, cfg: dict, title: str, model: str, api_key: str) -> str:
+def _gemini_caption(
+    image_path, cfg: dict, title: str, model: str, api_key: str, grain: str | None = None
+) -> str:
     """Décrit une image via l'API Gemini, avec EXACTEMENT le même prompt/logique.
 
     Meilleur OCR du texte stylisé/caché et descriptions plus fines qu'un petit
@@ -220,7 +236,7 @@ def _gemini_caption(image_path, cfg: dict, title: str, model: str, api_key: str)
         raise RuntimeError(f"Réponse Gemini inattendue : {str(resp)[:200]}")
 
     data = _extract_json(text) or {}
-    return _compose_caption(cfg, title, data)
+    return _compose_caption(cfg, title, data, grain)
 
 
 def generate_captions(
@@ -232,12 +248,16 @@ def generate_captions(
     vlm_model: str = DEFAULT_VLM,
     gemini_model: str = DEFAULT_GEMINI,
     gemini_api_key: str | None = None,
+    detect_grain_flag: bool = True,
     quiet: bool = False,
 ) -> int:
     """Crée un .txt par image du dataset. Retourne le nombre de fichiers écrits.
 
     backend : "simple" (légende minimale, sans IA), "local" (VLM mlx-vlm) ou
     "gemini" (API Gemini). Les deux backends VLM partagent prompt et logique.
+
+    detect_grain_flag : si True (défaut), mesure le grain de chaque image et l'inscrit
+    dans la légende -> le grain devient un attribut appris, dosable à la génération.
     """
     if backend not in {"simple", "local", "gemini"}:
         die(f"Backend de captioning inconnu : {backend!r} (simple|local|gemini).")
@@ -274,18 +294,20 @@ def generate_captions(
             continue
         # Le nom de fichier (sans extension) EST le titre du morceau.
         title = img.stem
+        # Grain MESURÉ sur l'image (déterministe, indépendant du backend de légende).
+        grain = detect_grain(img) if detect_grain_flag else None
         if backend == "simple":
-            text = _build_simple_caption(cfg, title, caption)
+            text = _build_simple_caption(cfg, title, caption, grain)
         else:
             try:
                 if backend == "gemini":
-                    text = _gemini_caption(img, cfg, title, gemini_model, api_key)
+                    text = _gemini_caption(img, cfg, title, gemini_model, api_key, grain)
                 else:
-                    text = _vlm_caption(img, cfg, title, vlm_model)
+                    text = _vlm_caption(img, cfg, title, vlm_model, grain)
             except Exception as exc:  # repli sur la légende simple en cas d'échec
                 if not quiet:
                     print(f"⚠️  VLM KO sur {img.name} ({exc}); légende simple utilisée.")
-                text = _build_simple_caption(cfg, title, caption)
+                text = _build_simple_caption(cfg, title, caption, grain)
             if not quiet:
                 print(f"   [{i}/{len(images)}] {img.name} -> {text}")
         txt.write_text(text + "\n", encoding="utf-8")
@@ -356,6 +378,12 @@ def main() -> None:
     parser.add_argument(
         "--overwrite", action="store_true", help="Écraser les .txt existants."
     )
+    parser.add_argument(
+        "--no-grain",
+        dest="detect_grain",
+        action="store_false",
+        help="Ne pas détecter/annoter le grain dans les légendes.",
+    )
     args = parser.parse_args()
     backend = "gemini" if args.gemini else "local" if args.auto else "simple"
     generate_captions(
@@ -366,6 +394,7 @@ def main() -> None:
         vlm_model=args.vlm_model,
         gemini_model=args.gemini_model,
         gemini_api_key=args.gemini_api_key,
+        detect_grain_flag=args.detect_grain,
     )
 
 

@@ -287,26 +287,31 @@ async function loadStyleOptions() {
     `<option value="${s.name}">${s.name}${s.trained ? "" : " (non entraîné)"}</option>`).join("");
 }
 
-$("#btnGenerate").onclick = async () => {
+async function runGenerate(random = false) {
   const body = {
     style: $("#genStyle").value,
     title: $("#genTitle").value,
     extra: $("#genExtra").value,
     title_mode: $("#genTitleMode").value,
+    grain: $("#genGrain").value,
+    random,
     width: +$("#genW").value, height: +$("#genH").value,
     steps: +$("#genSteps").value, guidance: +$("#genGuid").value,
     lora_scale: +$("#genScale").value,
-    seed: $("#genSeed").value ? +$("#genSeed").value : null,
+    // En aléatoire on force une seed aléatoire (champ ignoré) pour varier à chaque clic.
+    seed: random ? null : ($("#genSeed").value ? +$("#genSeed").value : null),
   };
   if (!body.style) return toast("Choisis un style.", true);
   try {
     const job = await api("POST", "/api/generate", body);
     $("#btnGenerate").disabled = true;
-    $("#genPreview").innerHTML = `<div class="placeholder">Génération en cours…</div>`;
+    $("#btnRandom").disabled = true;
+    $("#genPreview").innerHTML = `<div class="placeholder">${random ? "🎲 Inspiration en cours…" : "Génération en cours…"}</div>`;
     pollJob(job.id, {
       logEl: $("#genLog"), statusEl: $("#genStatus"),
       onDone: (j) => {
         $("#btnGenerate").disabled = false;
+        $("#btnRandom").disabled = false;
         if (j.status === "done" && j.result && j.result.image) {
           $("#genPreview").innerHTML = `<img src="${j.result.image}?t=${Date.now()}" />`;
           toast("Image générée ✓");
@@ -316,8 +321,11 @@ $("#btnGenerate").onclick = async () => {
         }
       },
     });
-  } catch (e) { toast(e.message, true); $("#btnGenerate").disabled = false; }
-};
+  } catch (e) { toast(e.message, true); $("#btnGenerate").disabled = false; $("#btnRandom").disabled = false; }
+}
+
+$("#btnGenerate").onclick = () => runGenerate(false);
+$("#btnRandom").onclick = () => runGenerate(true);
 
 // ----- Spotify ---------------------------------------------------------------
 let spMode = "existing";

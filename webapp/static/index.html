@@ -51,12 +51,26 @@
           <label>Description / prompt (ambiance, couleurs, éléments…)</label>
           <textarea id="genExtra" placeholder="Ex : néons tokyo, pluie, cinématique, voiture rétro"></textarea>
 
-          <label>Titre écrit dans l'image</label>
-          <select id="genTitleMode">
-            <option value="auto">Auto (selon le style)</option>
-            <option value="text">Oui, écrire le titre</option>
-            <option value="notext">Non, pas de texte</option>
-          </select>
+          <div class="row-inputs">
+            <div>
+              <label>Titre écrit dans l'image</label>
+              <select id="genTitleMode">
+                <option value="auto">Auto (selon le style)</option>
+                <option value="text">Oui, écrire le titre</option>
+                <option value="notext">Non, pas de texte</option>
+              </select>
+            </div>
+            <div>
+              <label>Grain (texture argentique)</label>
+              <select id="genGrain">
+                <option value="auto">Auto (comme appris)</option>
+                <option value="none">Aucun — image clean</option>
+                <option value="light">Léger</option>
+                <option value="medium">Moyen</option>
+                <option value="heavy">Fort</option>
+              </select>
+            </div>
+          </div>
 
           <div class="row-inputs three">
             <div><label>Largeur</label><input type="number" id="genW" value="1024" step="64" /></div>
@@ -68,7 +82,11 @@
             <div><label>Force style</label><input type="number" id="genScale" value="1.0" step="0.1" /></div>
             <div><label>Seed (vide=aléa)</label><input type="number" id="genSeed" placeholder="—" /></div>
           </div>
-          <button class="big" id="btnGenerate" style="margin-top:16px">🎨 Générer</button>
+          <div class="btn-row" style="margin-top:16px">
+            <button class="big" id="btnGenerate">🎨 Générer</button>
+            <button class="big ghost" id="btnRandom" title="Pas d'inspiration ? L'IA compose un prompt aléatoire à partir de ce qu'elle a appris du style.">🎲 Aléatoire</button>
+          </div>
+          <div class="hint">🎲 Aléatoire : pas besoin de prompt — l'IA invente une cover à partir du style appris (et du titre s'il est rempli).</div>
           <div id="genStatus"></div>
           <div class="log" id="genLog" style="display:none"></div>
         </div>

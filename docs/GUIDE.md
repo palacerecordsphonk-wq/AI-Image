@@ -123,6 +123,32 @@ il est écrit. Le LoRA apprend donc la vraie façon dont le style écrit ses tit
 > 💡 FLUX.1 rend bien le texte court. Pour un rendu typographique fiable, le mode
 > `--auto` + `title_text: yes` est nettement supérieur.
 
+### Le grain, comme variable apprise
+
+Beaucoup de covers ont du grain (texture argentique), d'autres sont clean. Pour ne
+pas « figer » le grain dans le style, on le traite comme le titre : **mesuré** sur
+chaque image à la préparation (détecteur de bruit haute-fréquence, robuste aux
+contours), puis **inscrit dans la légende** (`clean, no grain` / `subtle film grain`
+/ `film grain` / `heavy film grain`). Le LoRA apprend ainsi le grain comme un
+attribut nommé — donc **dosable à la génération** :
+
+| `--grain` | Effet |
+|---|---|
+| `auto` (défaut) | le modèle fait comme il a appris (mélange du style) |
+| `none` | **clean forcé** — aucun grain |
+| `light` / `medium` / `heavy` | dose le grain demandé |
+
+> Détection automatique à chaque `prepare_dataset.py` / `caption.py`. Pour la
+> désactiver : `caption.py … --no-grain`.
+
+### Bouton « Aléatoire » (pas d'inspiration)
+
+Sans idée de prompt, `generate_cover.py --random` (ou le bouton **🎲 Aléatoire** de
+l'interface) **compose un prompt** en piochant dans le **vocabulaire appris** du
+style — les fragments descriptifs extraits des légendes du dataset (couleurs,
+sujets, ambiances réellement vus). Si un titre est renseigné, il sert d'amorce ; la
+seed est aléatoire à chaque clic → des covers neuves mais fidèles au style.
+
 ---
 
 ## 5. Réglages d'entraînement selon la complexité
