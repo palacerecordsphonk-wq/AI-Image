@@ -84,16 +84,26 @@ TITLE_NOTE = {
 # On DONNE le titre connu (= nom du fichier) au VLM, au lieu de lui faire deviner
 # les lettres. Il juge la PRÉSENCE et décrit le STYLE d'écriture du titre.
 VLM_PROMPT_TMPL = (
-    'You are labeling an album cover to train an image model. '
-    'The track is titled "{title}". '
-    "Reply with ONLY one compact JSON object, no extra text, with keys:\n"
-    '"caption": ONE concise phrase (max 18 words) describing the visual style — '
-    "colors, mood, subject, texture, composition. No repeated words. Do NOT transcribe text.\n"
+    'You are an expert art director labeling an album cover to train an image '
+    'style model. The track is titled "{title}". '
+    "Reply with ONLY one compact JSON object, no extra text, with these keys:\n"
+    '"caption": ONE rich descriptive phrase, ~25-45 words, comma-separated fragments '
+    "(no full sentences, no repeated words, NO filler like beautiful/stunning/amazing/"
+    "masterpiece). Describe ONLY what is actually visible, in this order when present: "
+    "(1) main subject and its pose/action/expression, (2) secondary elements, "
+    "(3) setting/background, (4) color palette and dominant tones, (5) lighting "
+    "(direction, glow, contrast), (6) composition and framing (close-up, centered, "
+    "rule-of-thirds, depth), (7) distinctive visual effects and rendering "
+    "(neon glow, bloom, halftone dots, chrome, splatter, painterly, 3D, comic, "
+    "double-exposure, vignette). Be specific and concrete so the model can recreate "
+    "AND recombine this look. Do NOT transcribe any title or letters. Do NOT mention "
+    "film grain or noise (handled separately).\n"
     '"has_title": true ONLY if the title (or a clear part of it) is visibly written on '
     "the cover as graphic text — even if stylized, distorted, partial, integrated into "
     "the artwork or repeated. false only if there is no readable title text at all.\n"
-    '"title_style": if has_title, 4-10 words on HOW the title looks (font, weight, color, '
-    "placement, effects: bubble/graffiti/brushed-ink/chrome/glitch/stacked/repeated); else \"\"."
+    '"title_style": if has_title, 4-12 words on HOW the title looks (font, weight, color, '
+    "placement, effects: bubble/inflated/glossy/chrome/graffiti/neon-glow/outline/"
+    "stacked/repeated/3D); else \"\"."
 )
 
 
@@ -173,7 +183,7 @@ def _vlm_caption(image_path, cfg: dict, title: str, model: str, grain: str | Non
     cmd = [
         sys.executable, "-m", "mlx_vlm.generate",
         "--model", model,
-        "--max-tokens", "180",
+        "--max-tokens", "320",
         "--temperature", "0.2",
         "--prompt", VLM_PROMPT_TMPL.format(title=title),
         "--image", str(image_path),
@@ -208,7 +218,7 @@ def _gemini_caption(
         ],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 512,
+            "maxOutputTokens": 768,
             "responseMimeType": "application/json",
             # Pas de "réflexion" : plus rapide et moins cher pour ce labeling.
             "thinkingConfig": {"thinkingBudget": 0},

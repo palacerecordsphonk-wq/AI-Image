@@ -187,17 +187,44 @@ de régler quoi que ce soit, le script s'adapte.
 | Option | Défaut | Effet |
 |---|---|---|
 | `--title` | — | Titre du morceau (écrit dans l'image par défaut). |
+| `--model` | base_model du style | Modèle de génération : `flux1-dev`, `flux2-klein-9b` (qualité max), `flux2-klein-4b`. Charge le LoRA entraîné pour ce modèle. |
 | `--no-title-text` | off | Le titre devient un simple thème, non écrit. |
 | `--extra` | — | Détails additionnels (lieu, ambiance, couleurs…). |
 | `--random` | off | Pas d'inspiration ? Compose un prompt aléatoire depuis le vocabulaire appris du style (+ titre si fourni, seed aléatoire). |
 | `--grain` | auto | Dosage du grain : `auto` (comme appris), `none` (clean forcé), `light`/`medium`/`heavy`. |
 | `--lora-scale` | 1.0 | Force du style (0.7 = discret, 1.2 = très marqué). |
-| `--steps` | 25 | Plus = + de détail (et + lent). |
+| `--steps` | selon modèle | 25 pour FLUX.1, ~4 pour FLUX.2 Klein (distillé). |
 | `--seed` | aléatoire | Fixe-la pour reproduire/varier une image. |
 | `--width/--height` | 1024 | `1024x1024` = pochette ; `1280x720` = bannière. |
 | `--checkpoint` | dernier | Utiliser un checkpoint précis. |
 
 Voir [`prompts/templates.md`](prompts/templates.md) pour des exemples.
+
+### Choix du modèle : FLUX.1 ou FLUX.2 (un dataset, plusieurs LoRA)
+
+Un même style (**un seul dataset**) peut être entraîné sur plusieurs modèles ; à la
+génération tu choisis lequel utiliser. Les checkpoints sont rangés par modèle dans
+`styles/<style>/training/<modèle>/`.
+
+```bash
+# Entraîner le même style sur FLUX.1 ET FLUX.2 Klein 9B
+python scripts/train_style.py phonk --model flux1-dev
+python scripts/train_style.py phonk --model flux2-klein-9b
+
+# Générer avec l'un ou l'autre (même titre, comparaison directe)
+python scripts/generate_cover.py phonk --title "Midnight" --model flux1-dev
+python scripts/generate_cover.py phonk --title "Midnight" --model flux2-klein-9b
+```
+
+| Modèle (`--model`) | Entraîne sur | Génère avec | Pour |
+|---|---|---|---|
+| `flux1-dev` *(défaut)* | FLUX.1 dev | FLUX.1 dev | éprouvé, valeur sûre |
+| `flux2-klein-9b` | `flux2-klein-base-9b` | `flux2-klein-9b` (distillé, ~4 steps) | **qualité max** (détail + texte) |
+| `flux2-klein-4b` | `flux2-klein-base-4b` | `flux2-klein-4b` | plus rapide, qualité un cran sous le 9B |
+
+> FLUX.2 nécessite une version récente de mflux (`pip install -U mflux`). On
+> entraîne toujours sur la variante **base** (non-distillée) pour un LoRA propre,
+> et on génère sur la variante **distillée** (rapide).
 
 ---
 

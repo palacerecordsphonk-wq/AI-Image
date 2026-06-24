@@ -116,6 +116,13 @@ button.big { width: 100%; padding: 13px; font-size: 15px; }
 /* Thumbnails */
 .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-top: 12px; }
 .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+/* Vignettes avec légende (après préparation) : plus larges, légende dessous. */
+.thumbs.captioned { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.thumbs figure.thumb { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.thumbs figure.thumb img { aspect-ratio: 1; }
+.thumbs .cap { font-size: 11px; line-height: 1.35; color: var(--text); background: var(--bg-3);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; max-height: 88px; overflow: auto; }
+.thumbs .cap.muted { color: var(--muted); font-style: italic; }
 
 /* Log */
 .log {

@@ -5,6 +5,8 @@
 # Il ne s'installe QUE sur macOS Apple Silicon (il dépend de `mlx`).
 
 mflux>=0.18.0      # génération + entraînement LoRA natif Apple Silicon
+#                  # ⚠️ FLUX.2 Klein (flux2-klein-*) nécessite une version RÉCENTE de
+#                  #    mflux : « pip install -U mflux » si tu vises FLUX.2.
 Pillow>=10.0.0     # préparation/redimensionnement des images
 PyYAML>=6.0        # lecture des fichiers style.yaml
 
